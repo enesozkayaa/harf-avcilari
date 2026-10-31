@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Harf Avcıları</title>
+  <!-- Telefonda uygulama gibi açılması için (ana ekrana ekle / APK) -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#1e2235">
+  <link rel="icon" type="image/png" href="ikonlar/ikon-192.png">
+  <link rel="apple-touch-icon" href="ikonlar/ikon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 1) KURULUM EKRANI: oyuncu sayısı, isimler, hedef puan, kelime turu sıklığı -->
+  <section id="kurulum" class="ekran">
+    <h1>🔤 Harf Avcıları</h1>
+    <p class="soluk">Zar at, harf topla, rakiplerine kart oyna. Belirli turlarda harflerinle kelime kurup puan kazan. Hedef puana ilk ulaşan kazanır!</p>
+    <!-- 🌐 Online: biri oda açar, diğeri kodla katılır (bağlantı ag.js'te) -->
+    <fieldset class="onlineKutu">
+      <legend>🌐 Online oyna (2 kişi)</legend>
+      <p class="soluk kucuk">Arkadaşın kendi telefonundan ya da bilgisayarından oda koduyla katılır.
+        Önce aşağıya kendi adını yaz ve rengini seç.</p>
+      <div class="butonlar">
+        <button id="odaAcBtn" class="ana">🏠 Oda Aç</button>
+      </div>
+      <div class="katilSatiri">
+        <input id="odaKodu" maxlength="5" placeholder="Oda kodu" autocomplete="off" autocapitalize="characters">
+        <button id="katilBtn">🔑 Katıl</button>
+      </div>
+      <p id="onlineDurum" class="kucuk"></p>
+    </fieldset>
+    <label>Oyuncu sayısı
+      <select id="oyuncuSayisi">
+        <option>2</option>
+        <option selected>3</option>
+        <option>4</option>
+        <option>5</option>
+        <option>6</option>
+      </select>
+    </label>
+    <div id="isimAlanlari"></div>
+    <label>Tahta
+      <select id="tahtaSecimi">
+        <option value="klasik">Klasik (tek yol)</option>
+        <option value="genis" selected>Genişletilmiş (yol ayrımlı, marketli, 62 kare)</option>
+      </select>
+    </label>
+    <label>Hedef puan
+      <select id="hedefPuan">
+        <option value="100" selected>100 (normal)</option>
+        <option value="150">150 (uzun)</option>
+        <option value="200">200 (çok uzun)</option>
+        <option value="250">250 (maraton)</option>
+      </select>
+    </label>
+    <label>Kelime turu
+      <select id="kelimeSiklik">
+        <option value="3" selected>her 3 turda bir</option>
+        <option value="5">her 5 turda bir</option>
+        <option value="8">her 8 turda bir</option>
+      </select>
+    </label>
+    <!-- Kutucuklar game.js'te KARTLAR listesinden oluşturulur -->
+    <fieldset id="kartSecimi" class="kartSecimi"></fieldset>
+    <button id="baslaBtn" class="ana">Oyunu Başlat</button>
+    <p class="soluk kucuk kaynakNotu">Kelime listesi: TDK sözlüğünden derlenen
+      <a href="https://github.com/bilalozdemir/tr-word-list" target="_blank" rel="noopener">tr-word-list</a>
+      (CC BY-SA 4.0)</p>
+  </section>
+
+  <!-- 2) OYUN EKRANI: tahta (ortasında zar) + yan panel -->
+  <section id="oyun" class="ekran gizli">
+    <div class="oyunAlani">
+    <!-- Üst bar düz durur (3D değil), böylece zar veya piyonların arkasında kalmaz -->
+    <div class="ustBar">
+      <span id="turBilgisi"></span>
+      <span id="siraBilgisi"></span>
+      <span id="hedefBilgisi"></span>
+      <span>
+        <button id="sesBtn">🔊</button>
+        <button id="menuBtn">🏠 Ana Menü</button>
+      </span>
+    </div>
+    <!-- "sahne" tahtaya 3D derinlik (perspektif) verir, tahta da masada yatıyormuş gibi eğilir -->
+    <div id="sahne">
+      <div id="tahta">
+        <!-- Kareler game.js tarafından buraya eklenir -->
+        <div id="orta">
+          <div class="zarSahne">
+            <div id="zarKup" class="zarKup"><!-- 6 yüz game.js'te oluşturulur --></div>
+          </div>
+          <!-- Kontroller: 3D modda game.js bunları 3D sahnenin üstüne taşır -->
+          <div id="kontroller">
+            <!-- Zar sonucu: büyük sayı + kart etkileri (🎭 Hileli zar!, 🎲 −2, ⏫ +3) -->
+            <div class="zarSatiri">
+              <div id="zarSonucu" class="gizli"><span class="sayi">0</span><span class="etiket"></span></div>
+              <button id="zarBtn" class="ana">Zar At</button>
+            </div>
+            <p id="mesaj"></p>
+            <p id="kartIpucu" class="soluk kucuk"></p>
+            <!-- 🔀 Yol ayrımında: hangi yoldan gidileceği seçilir (3D'de oklara da tıklanabilir) -->
+            <div id="yolPaneli" class="gizli"></div>
+            <!-- ⚔️ Kart Kullan karesine gelince: önce kart, sonra hedef seçilir -->
+            <div id="saldiriPaneli" class="gizli"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Gerçek 3D tahta (tahta3d.js). Three.js yüklenemezse gizli kalır, üstteki CSS tahtası kullanılır. -->
+    <div id="tahta3d" class="gizli">
+      <div class="ipucu3d">🖱️ Sürükle: döndür · Tekerlek: yakınlaştır · Çift tık: sıfırla</div>
+    </div>
+    </div>
+    <aside id="yanPanel">
+      <h3>Oyuncular</h3>
+      <div id="oyuncuListesi"></div>
+      <h3>Olaylar</h3>
+      <ul id="kayitListesi"></ul>
+    </aside>
+  </section>
+
+  <!-- 3) KELİME TURU EKRANI: herkes sırayla kelimesini kurar -->
+  <section id="final" class="ekran gizli">
+    <h2 id="finalBaslik"></h2>
+    <div class="sureKutusu">⏱️ <span id="sure">60</span> sn</div>
+    <div id="kelime" class="kelime">…</div>
+    <div id="onPuan" class="soluk"></div>
+    <div id="finalHarfler" class="finalHarfler"></div>
+    <div id="jokerSecici" class="gizli"></div>
+    <div id="kelimeKontrolleri" class="butonlar">
+      <button id="karistirBtn" title="Taşların yerini karıştır" onclick="eylem('taslariKaristir')">🔀 Karıştır</button>
+      <button id="silBtn" onclick="eylem('harfSil')">⌫ Sil</button>
+      <button id="pasBtn" onclick="eylem('pasGec')">Pas</button>
+      <button id="gonderBtn" class="ana" onclick="eylem('kelimeyiGonder')">Gönder ✓</button>
+    </div>
+    <!-- Kelime gönderilince: sözlükte varsa onay, yoksa masa (online'da rakip) karar verir -->
+    <div id="oylama" class="gizli">
+      <p id="oylamaSoru"></p>
+      <div class="butonlar">
+        <button id="sozlukDevamBtn" class="ana" onclick="eylem('oyla', true, false)">Devam →</button>
+        <button id="gecerliBtn" class="ana" onclick="eylem('oyla', true)">✓ Geçerli</button>
+        <button id="gecersizBtn" onclick="eylem('oyla', false)">✗ Geçersiz</button>
+      </div>
+    </div>
+    <p class="soluk kucuk">Kelimenin puanı = harflerin puanları toplamı (taşların köşesinde yazar). ★ Joker istediğin harf olur, 0 puandır. Köşesinde ★ olan altın taşlar (Harf Seç kartı) 1 puandır.<br>
+      Elindeki tüm harfleri kullanıp en az 6 harfli bir kelime kurarsan +35 bonus!<br>
+      Kelimede kullandığın harfler elinden gider, kalanlar seninle tahtaya döner.</p>
+  </section>
+
+  <!-- 4) SONUÇ EKRANI: her kelime turundan sonra ara sonuç, hedefe ulaşılınca kazanan -->
+  <section id="sonuc" class="ekran gizli">
+    <h2 id="kazanan"></h2>
+    <p id="sonucAlt" class="soluk"></p>
+    <table>
+      <thead><tr><th>#</th><th>Oyuncu</th><th>Bu turun kelimesi</th><th>+Puan</th><th>Toplam</th><th id="odulBasligi" class="gizli">🖋️ Ödül</th></tr></thead>
+      <tbody id="sonucTablosu"></tbody>
+    </table>
+    <div class="butonlar">
+      <button id="devamBtn" class="ana" onclick="eylem('tahtayaDevam')">Tahtaya Devam →</button>
+      <button id="tekrarBtn" class="ana" onclick="location.reload()">Yeniden Oyna</button>
+    </div>
+  </section>
+
+  <!-- Online bağlantı koptuğunda -->
+  <div id="baglantiKoptu" class="perde gizli">
+    <div class="pencere">
+      <h3>📡 Bağlantı koptu</h3>
+      <p>Arkadaşınla bağlantı kesildi. Oyunu sürdürmek için ana menüye dönüp yeni bir oda açın.</p>
+      <div class="butonlar">
+        <button class="ana" onclick="location.reload()">🏠 Ana menüye dön</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ana Menü onay penceresi: tarayıcının kendi onay kutusu bazen engellendiği için kendi penceremiz -->
+  <div id="menuOnay" class="perde gizli">
+    <div class="pencere">
+      <h3>🏠 Ana menüye dönülsün mü?</h3>
+      <p>Oyun yarıda kesilecek ve en başa dönülecek. Emin misiniz?</p>
+      <p class="soluk kucuk">Oyuncu isimleri ve ayarlar kalır.</p>
+      <div class="butonlar">
+        <button id="menuHayirBtn">Hayır, oyuna dön</button>
+        <button id="menuEvetBtn" class="tehlike">Evet, ana menüye dön</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ses.js önce yüklenir, çünkü game.js içindeki sesCal() onu kullanır -->
+  <!-- 3D motoru (Three.js): önce klasördeki kopyaya bakılır (internetsiz oynamak için lib/three.min.js),
+       yoksa internetten yüklenir. İkisi de olmazsa oyun eski CSS tahtasıyla çalışır. -->
+  <script src="lib/three.min.js"></script>
+  <script>
+    window.THREE || document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.min.js"><\/script>');
+  </script>
+  <script src="tahta3d.js"></script>
+  <script src="ses.js"></script>
+  <!-- TDK kelime listesi (araclar/kelime_listesi_olustur.js ile üretilir). Yoksa oyun oylamayla çalışır. -->
+  <script src="kelimeler.js"></script>
+  <script src="game.js"></script>
+  <!-- Online oyun: PeerJS iki cihazı doğrudan bağlar; ag.js oda açma/katılma ve senkronizasyonu yapar -->
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="ag.js"></script>
+  <script>
+    // Servis çalışanı: sadece internetten (https) açılınca çalışır, dosyaya çift tıklayınca değil
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js');
+  </script>
+</body>
+</html>

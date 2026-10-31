@@ -1,0 +1,574 @@
+/* Renkler tek yerde: değiştirmek istersen buradan değiştir */
+:root {
+  --zemin: #1e2235;
+  --panel: #2a2f4a;
+  --koyu: #1a1d2e;
+  --cizgi: #3a3f5e;
+  --yazi: #f4f4f8;
+  --soluk: #a9adc6;
+  --vurgu: #ffd166;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: var(--zemin);
+  color: var(--yazi);
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  background: #3c4266;
+  color: var(--yazi);
+}
+button:hover:not(:disabled) { filter: brightness(1.2); }
+button:disabled { opacity: .4; cursor: not-allowed; }
+button.ana { background: var(--vurgu); color: #222; font-weight: 700; }
+
+select, input {
+  font: inherit;
+  padding: 8px;
+  border-radius: 8px;
+  border: 2px solid #444a70;
+  background: var(--koyu);
+  color: var(--yazi);
+}
+
+.gizli { display: none !important; }
+.soluk { color: var(--soluk); }
+.kucuk { font-size: 13px; }
+.ekran { padding: 16px; }
+
+/* ---------- Kurulum ---------- */
+#kurulum {
+  max-width: 420px;
+  margin: 40px auto;
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#kurulum h1 { margin: 0; }
+#isimAlanlari { display: flex; flex-direction: column; gap: 10px; }
+.kaynakNotu { margin: 0; text-align: center; }
+.kaynakNotu a { color: var(--soluk); }
+
+/* İsim kutusu ve altında piyon rengi kutucukları */
+.oyuncuSatiri { display: flex; flex-direction: column; gap: 4px; }
+.renkSecimi { display: flex; flex-wrap: wrap; gap: 5px; }
+.renk {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .25);
+}
+.renk.secili { border-color: #fff; box-shadow: 0 0 0 2px var(--vurgu); transform: scale(1.15); }
+.renk:disabled { opacity: .15; }
+
+.kartSecimi {
+  border: 2px solid #444a70;
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.kartSecimi legend { padding: 0 6px; color: var(--soluk); }
+label.kartSecenek { justify-content: flex-start; align-items: flex-start; cursor: pointer; }
+.kartSecenek input { margin-top: 4px; width: 16px; height: 16px; accent-color: var(--vurgu); }
+.kartSecenek small { display: block; color: var(--soluk); font-size: 12px; }
+.kartSecenek.hepsiniSec { padding-bottom: 6px; border-bottom: 1px solid var(--cizgi); }
+.kartSecenek.hepsiniSec small { display: inline; }
+label { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+
+/* ---------- Oyun ekranı ---------- */
+#oyun:not(.gizli) {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.oyunAlani { display: flex; flex-direction: column; gap: 8px; }
+
+#kontroller { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+
+/* Zar sonucu ve Zar At butonu yan yana: panel kısa kalsın, tahtayı kapatmasın */
+.zarSatiri { display: flex; align-items: center; gap: 16px; }
+#zarSonucu { display: flex; align-items: center; gap: 10px; }
+#zarSonucu .sayi {
+  min-width: 44px;
+  font-size: 42px;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--vurgu);
+  text-shadow: 0 3px 0 rgba(0, 0, 0, .35);
+}
+#zarSonucu .etiket { font-size: 18px; font-weight: 700; }
+#zarSonucu .etiket:empty { display: none; }
+.belir { animation: belir .35s ease-out; }
+.tik { animation: tik .09s ease-out; }
+@keyframes belir {
+  from { transform: scale(.4); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+@keyframes tik {
+  from { transform: scale(1.3); }
+  to   { transform: scale(1); }
+}
+
+/* Yedek CSS tahtasında zarla gelinecek kareler */
+.kare.hedef { outline: 3px dashed var(--vurgu); outline-offset: 2px; }
+
+/* ---------- Gerçek 3D tahta (Three.js) ---------- */
+#tahta3d {
+  position: relative;
+  width: min(92vw, 860px);
+  height: min(74vh, 660px);
+  border-radius: 16px;
+  overflow: hidden;
+  background: #151827;
+}
+#tahta3d canvas { display: block; cursor: grab; touch-action: none; }
+#tahta3d canvas:active { cursor: grabbing; }
+.ipucu3d {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  font-size: 12px;
+  color: var(--soluk);
+  pointer-events: none;
+}
+/* Kontroller sahnenin altında, yarı saydam bir panelde */
+#tahta3d #kontroller {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 24px);
+  padding: 8px 16px;
+  border-radius: 12px;
+  background: rgba(42, 47, 74, .88);
+  backdrop-filter: blur(4px);
+  text-align: center;
+  gap: 4px;
+}
+#tahta3d #kontroller p { margin: 0; }
+#tahta3d #kontroller .adim { font-size: 13px; }
+
+.ustBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-weight: 700;
+}
+.ustBar button { font-weight: 400; padding: 6px 10px; }
+
+/* ---------- 3D ----------
+   perspective: göz tahtaya ne kadar uzakta (küçüldükçe 3D etkisi artar).
+   transform-style: preserve-3d: içindeki parçalar da 3D uzayda kalsın (zar, piyonlar).
+   Not: overflow, filter, opacity gibi özellikler 3D'yi düzleştirir, bu zincirde kullanma. */
+#sahne {
+  perspective: 1400px;
+  padding: 10px 0 40px;
+}
+
+/* Tahta 7x7'lik bir ızgara: kareler kenarlarda, ortası boş. rotateX ile geriye yatırılır. */
+#tahta {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: repeat(7, 1fr);
+  gap: 5px;
+  width: min(92vw, 620px);
+  aspect-ratio: 1;
+  padding: 10px;
+  background: #2f3557;
+  border-radius: 18px;
+  transform: rotateX(28deg);
+  transform-style: preserve-3d;
+  /* Alt gölge tahtaya kalınlık verir, ikinci gölge masaya düşen gölge */
+  box-shadow: 0 16px 0 #161a2b, 0 40px 60px rgba(0, 0, 0, .6);
+}
+
+.kare {
+  border-radius: 8px;
+  padding: 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  position: relative;
+  font-size: 11px;
+  color: #1b1b1b;
+  transform-style: preserve-3d;
+  box-shadow: 0 5px 0 rgba(0, 0, 0, .35);  /* karo kalınlığı */
+}
+.kare .ikon { font-size: 18px; }
+.kare-baslangic { background: #ffd166; }
+.kare-harf      { background: #a8d8f0; }
+.kare-bonus     { background: #9be3a8; }
+.kare-kart      { background: #c9b3f5; }
+.kare-ceza      { background: #f5a3a3; }
+.kare-saldir    { background: #f7c08a; }
+
+/* Piyonlar karenin alt kenarında durur, böylece karenin yazısını kapatmazlar */
+.piyonlar {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 3px;
+  display: flex;
+  flex-wrap: wrap-reverse;
+  gap: 2px;
+  justify-content: center;
+  transform-style: preserve-3d;
+}
+
+/* 3D piyon: tahtada yatan yuvarlak bir taban + üstünde dik duran 3 "gövde" plakası.
+   Plakalar aynı eksen etrafında 0°, 60°, 120° döndürülür; birlikte her açıdan dolu bir taş gibi görünür.
+   Rengi game.js --renk değişkeniyle verir. */
+.piyon {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  transform-style: preserve-3d;
+}
+.piyon .taban {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--renk);
+  border: 2px solid rgba(0, 0, 0, .35);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, .5);
+  transform: translateZ(1px);
+}
+.piyon .govde {
+  position: absolute;
+  left: 2px;
+  top: -22px;           /* alt kenarı tabanın ortasına gelsin: 10px (orta) - 32px (boy) */
+  width: 16px;
+  height: 32px;
+  transform-origin: 50% 100%;
+  /* Kenarlar koyu, orta açık: silindir gibi ışık alsın */
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, .35), rgba(255, 255, 255, .35) 50%, rgba(0, 0, 0, .35)),
+    var(--renk);
+  /* Klasik piyon silüeti: yuvarlak baş, ince boyun, genişleyen gövde */
+  clip-path: polygon(
+    38% 0, 62% 0, 78% 10%, 80% 24%, 64% 36%, 58% 42%,
+    66% 70%, 86% 88%, 100% 100%, 0 100%, 14% 88%, 34% 70%,
+    42% 42%, 36% 36%, 20% 24%, 22% 10%
+  );
+}
+/* rotateX(-90deg) plakayı tahtadan ayağa kaldırır, rotateZ dik eksen etrafında çevirir */
+.piyon .govde:nth-child(2) { transform: rotateZ(0deg)   rotateX(-90deg); }
+.piyon .govde:nth-child(3) { transform: rotateZ(60deg)  rotateX(-90deg); }
+.piyon .govde:nth-child(4) { transform: rotateZ(120deg) rotateX(-90deg); }
+
+.piyon.aktif .taban { box-shadow: 0 0 10px 4px var(--vurgu); }
+.piyon.zipla { animation: zipla .35s ease-out; }
+
+/* Zıplama: piyon tahtadan yukarı (Z ekseninde) kalkıp geri iner */
+@keyframes zipla {
+  0%, 100% { transform: translateZ(0); }
+  50%      { transform: translateZ(22px); }
+}
+
+#orta {
+  grid-row: 2 / 7;
+  grid-column: 2 / 7;
+  background: var(--panel);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  text-align: center;
+  transform-style: preserve-3d;
+}
+#mesaj, #kartIpucu { margin: 0; }
+
+/* 3D zar: 6 kare yüz, her biri küpün merkezinden yarım kenar (32px) dışarı itilir */
+.zarSahne {
+  width: 64px;
+  height: 64px;
+  margin: 6px 0 10px;
+  transform-style: preserve-3d;
+  transform: translateZ(32px);  /* zarı tahtanın üstüne oturt */
+}
+.zarKup {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform .95s cubic-bezier(.2, .7, .3, 1);
+}
+.yuz {
+  position: absolute;
+  inset: 0;
+  background: #fffdf5;
+  border: 1px solid #d8d2c0;
+  border-radius: 10px;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, .18);
+}
+.yuz .nokta {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #222;
+  justify-self: center;
+  align-self: center;
+}
+/* Karşılıklı yüzlerin toplamı 7: 1-6, 2-5, 3-4 (gerçek zarlardaki gibi) */
+.yuz-1 { transform: rotateY(0deg)   translateZ(32px); }
+.yuz-6 { transform: rotateY(180deg) translateZ(32px); }
+.yuz-2 { transform: rotateY(90deg)  translateZ(32px); }
+.yuz-5 { transform: rotateY(-90deg) translateZ(32px); }
+.yuz-3 { transform: rotateX(90deg)  translateZ(32px); }
+.yuz-4 { transform: rotateX(-90deg) translateZ(32px); }
+
+#saldiriPaneli, #yolPaneli { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+#yolPaneli .kartBtn { font-size: 15px; padding: 6px 12px; }
+
+/* Yedek CSS tahtasında yol ayrımında seçilebilecek kareler */
+.kare.secilebilir { outline: 3px solid var(--vurgu); animation: nabiz 0.8s ease-in-out infinite alternate; }
+@keyframes nabiz { to { outline-color: transparent; } }
+
+/* Yedek CSS tahtasında karenin köşesindeki tuzak / dönen taş simgesi */
+.kare .ekstra { position: absolute; top: 2px; right: 4px; font-weight: 800; font-size: 13px; }
+
+.kare-hazine    { background: #ffe08a; }
+.kare-market    { background: #7fd8be; }
+.kare-vergi     { background: #c8c8c8; }
+.kare-kartKaybi { background: #d9b3d0; }
+#saldiriPaneli .adim { width: 100%; margin: 0; font-weight: 700; }
+.kartBtn { background: var(--koyu); border: 2px solid var(--vurgu); padding: 4px 10px; font-size: 13px; }
+
+.oyuncuUst { display: flex; justify-content: space-between; }
+.rozetler { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.rozetler:empty { display: none; }
+.rozet { font-size: 11px; background: #5a2d3c; border-radius: 10px; padding: 1px 7px; }
+.puan { color: var(--vurgu); font-weight: 700; }
+.murekkep { color: #8ecbff; font-weight: 700; margin-right: 6px; }
+
+/* 🏪 Market kartı: adı üstte, fiyatı altta */
+.marketKarti { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; min-width: 110px; }
+.marketKarti .fiyat { font-size: 12px; color: #8ecbff; font-weight: 700; }
+
+/* ---------- Yan panel ---------- */
+#yanPanel {
+  width: min(92vw, 320px);
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 12px;
+}
+#yanPanel h3 { margin: 4px 0 8px; }
+
+.oyuncuKart {
+  border-left: 6px solid;
+  background: var(--koyu);
+  border-radius: 8px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+.oyuncuKart.sirada { outline: 2px solid var(--vurgu); }
+
+.harfler, .kartlar { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; font-size: 13px; }
+.kartlar span { background: #3c4266; border-radius: 6px; padding: 2px 6px; }
+
+/* Harf taşı: hem yan panelde hem finalde kullanılıyor */
+.harf {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: #f5e6c4;
+  color: #222;
+  border-radius: 5px;
+  font-weight: 700;
+  box-shadow: 0 2px 0 #b9a679;
+}
+.harf { position: relative; }
+.harf sub {
+  position: absolute;
+  right: 2px;
+  bottom: 1px;
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 1;
+}
+.harf.joker { background: #ffd166; }
+/* ✍️ Harf Seç ile alınan özel taş: joker rengi + sol üst köşede yıldız */
+.harf.ozel { background: #ffd166; box-shadow: 0 2px 0 #c9a227, inset 0 0 0 2px #e0a800; }
+.harf.ozel::before {
+  content: '★';
+  position: absolute;
+  top: 0;
+  left: 2px;
+  font-size: 8px;
+  line-height: 1.1;
+  color: #8a5a00;
+}
+.harf.buyuk.ozel::before { font-size: 12px; left: 4px; top: 2px; }
+
+/* Harf Seç kartındaki alfabe */
+.alfabe { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; max-width: 520px; }
+.alfabe button { width: 32px; padding: 5px 0; font-weight: 700; }
+.harf.buyuk { width: 48px; height: 48px; font-size: 24px; }
+.harf.buyuk sub { font-size: 11px; right: 4px; bottom: 3px; }
+
+/* Karıştırınca taşlar küçükten büyüyüp hafifçe dönerek yerine oturur */
+.harf.karisti { animation: karisti .3s ease-out; }
+@keyframes karisti {
+  from { transform: scale(.6) rotate(-12deg); opacity: .3; }
+  to   { transform: scale(1) rotate(0); opacity: 1; }
+}
+
+#jokerSecici {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+#jokerSecici p { width: 100%; margin: 0 0 4px; font-weight: 700; }
+#jokerSecici button { width: 36px; padding: 6px 0; font-weight: 700; }
+#jokerSecici button:last-child { width: auto; padding: 6px 12px; }
+
+#kayitListesi {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  font-size: 13px;
+  color: var(--soluk);
+}
+#kayitListesi li { padding: 4px 0; border-bottom: 1px solid var(--cizgi); }
+
+/* ---------- 🌐 Online ---------- */
+.onlineKutu {
+  border: 2px solid #3d6a8f;
+  border-radius: 10px;
+  padding: 8px 12px 10px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.onlineKutu legend { padding: 0 6px; color: #8ecbff; font-weight: 700; }
+.onlineKutu p { margin: 0; }
+.katilSatiri { display: flex; gap: 8px; }
+.katilSatiri input { flex: 1; text-transform: uppercase; letter-spacing: 3px; font-weight: 700; }
+.odaKodu { font-size: 26px; letter-spacing: 6px; color: var(--vurgu); }
+
+/* Online'da sıra rakipteyken butonlar izlenir ama tıklanmaz */
+.izleyici { pointer-events: none; opacity: .5; }
+#kontroller.izleyici { opacity: 1; }
+#kontroller.izleyici button { pointer-events: none; opacity: .45; }
+
+/* ---------- 📱 Telefon (dar ekran) düzeni ----------
+   Tahta üstte, kontroller onun altında (tahtayı kapatmasın), oyuncular en altta. */
+@media (max-width: 760px) {
+  .ekran { padding: 8px; }
+  #kurulum { margin: 8px auto; padding: 16px; }
+  .ustBar { flex-wrap: wrap; justify-content: center; gap: 4px 10px; font-size: 13px; padding: 6px 8px; }
+  .oyunAlani { width: 100%; }
+  #tahta3d { width: 100%; height: 52vh; border-radius: 12px; }
+  .ipucu3d { font-size: 11px; }
+  .oyunAlani > #kontroller {
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+  #zarBtn { padding: 12px 22px; font-size: 17px; }
+  .kartBtn { padding: 8px 10px; }
+  #yanPanel { width: 100%; }
+  #kayitListesi { max-height: 160px; }
+  #final, #sonuc { margin: 8px auto; padding: 14px; }
+  .kelime { font-size: 30px; letter-spacing: 3px; }
+  .harf.buyuk { width: 42px; height: 42px; font-size: 21px; }
+  table { font-size: 13px; }
+  th, td { padding: 6px 4px; }
+}
+
+/* ---------- Konfeti ---------- */
+.konfeti {
+  position: fixed;
+  top: -20px;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 200;
+  animation: konfetiDus linear forwards;
+}
+@keyframes konfetiDus {
+  to { transform: translate(var(--salinim), 105vh) rotate(var(--donus)); }
+}
+
+/* ---------- Onay penceresi ---------- */
+/* Perde tüm ekranı karartır, pencere ortada durur */
+.perde {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 100;
+}
+.pencere {
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 420px;
+  text-align: center;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, .5);
+}
+.pencere h3 { margin-top: 0; }
+.pencere .butonlar { flex-wrap: wrap; }
+button.tehlike { background: #e74c3c; color: white; font-weight: 700; }
+
+/* ---------- Final ve sonuç ---------- */
+#final, #sonuc {
+  max-width: 640px;
+  margin: 24px auto;
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+}
+.sureKutusu { font-size: 22px; font-weight: 700; }
+.kelime { font-size: 40px; letter-spacing: 6px; min-height: 56px; font-weight: 800; margin-top: 8px; }
+.finalHarfler { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 16px 0; }
+.butonlar { display: flex; gap: 8px; justify-content: center; }
+
+table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+th, td { padding: 8px; border-bottom: 1px solid var(--cizgi); }
