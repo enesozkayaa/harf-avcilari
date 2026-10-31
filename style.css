@@ -396,7 +396,7 @@ label { display: flex; justify-content: space-between; align-items: center; gap:
 .oyuncuKart.sirada { outline: 2px solid var(--vurgu); }
 
 .harfler, .kartlar { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; font-size: 13px; }
-.kartlar span { background: #3c4266; border-radius: 6px; padding: 2px 6px; }
+.kartlar > span { background: #3c4266; border-radius: 6px; padding: 2px 6px; }
 
 /* Harf taşı: hem yan panelde hem finalde kullanılıyor */
 .harf {
@@ -572,3 +572,284 @@ button.tehlike { background: #e74c3c; color: white; font-weight: 700; }
 
 table { width: 100%; border-collapse: collapse; margin: 16px 0; }
 th, td { padding: 8px; border-bottom: 1px solid var(--cizgi); }
+
+/* =============================================================
+   Görsellik ve anlatım (gorsel.js)
+   ============================================================= */
+:root {
+  --saldiri: #e74c3c;
+  --yardim: #2ecc71;
+  --savunma: #3d9df2;
+  --tahta: #a66bd6;
+}
+.tur-saldiri { --tur: var(--saldiri); }
+.tur-yardim  { --tur: var(--yardim); }
+.tur-savunma { --tur: var(--savunma); }
+.tur-tahta   { --tur: var(--tahta); }
+.tur-iyi     { --tur: #ffd166; }
+.tur-kotu    { --tur: #8a5a5a; }
+
+/* ---------- 🃏 Kart yüzü ---------- */
+.kartSirasi { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 100%; }
+.kartYuz {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 112px;
+  min-height: 132px;
+  padding: 8px 6px 6px;
+  border-radius: 12px;
+  border: 3px solid var(--tur, var(--vurgu));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--tur, #888) 32%, transparent), transparent 55%),
+    #23273d;
+  color: var(--yazi);
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--tur, #888) 55%, #000), 0 6px 14px rgba(0, 0, 0, .35);
+  text-align: center;
+  font-weight: 400;
+  cursor: pointer;
+  transition: transform .15s ease;
+}
+button.kartYuz:hover:not(:disabled) { transform: translateY(-4px) rotate(-1.5deg); }
+.kartYuz:disabled { opacity: .45; cursor: not-allowed; }
+.kartIkon { font-size: 38px; line-height: 1.15; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .4)); }
+.kartAd { font-size: 13px; line-height: 1.15; }
+.kartKisa { font-size: 11px; color: #d7d9e8; line-height: 1.2; }
+.kartPasif { font-size: 9.5px; color: var(--soluk); font-style: italic; }
+.kartYuz .fiyat { margin-top: auto; font-size: 13px; color: #8ecbff; font-weight: 700; }
+
+/* Yan paneldeki küçük kartlar */
+.kartYuz.mini {
+  width: 58px;
+  min-height: 0;
+  padding: 4px 3px;
+  border-width: 2px;
+  border-radius: 8px;
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--tur, #888) 55%, #000);
+}
+.kartYuz.mini .kartIkon { font-size: 22px; }
+.kartYuz.mini .kartAd { font-size: 10px; }
+.kartYuz.arka {
+  --tur: #5b6190;
+  background: repeating-linear-gradient(45deg, #2f3456 0 6px, #262a46 6px 12px);
+  justify-content: center;
+  cursor: default;
+}
+.kartYuz.buyuk { width: 170px; min-height: 200px; padding: 14px 10px; border-width: 4px; border-radius: 16px; cursor: default; }
+.kartYuz.buyuk .kartIkon { font-size: 70px; }
+.kartYuz.buyuk .kartAd { font-size: 19px; }
+.kartYuz.buyuk .kartKisa { font-size: 14px; }
+.kartYuz.yeniKart { animation: kartGeldi 1.6s ease-out both; }
+@keyframes kartGeldi {
+  0% { transform: scale(.3) rotate(-20deg); }
+  20% { transform: scale(1.15) rotate(4deg); box-shadow: 0 0 18px 6px var(--vurgu); }
+  35% { transform: scale(1); }
+}
+.kartlar { gap: 6px; }
+
+/* Kurulum ekranındaki kart listesi ve olay listesi: solda türün rengi */
+.kartSecenek[class*="tur-"] { border-left: 4px solid var(--tur); padding-left: 6px; border-radius: 4px; }
+#kayitListesi li { animation: kayitGeldi .35s ease-out; }
+#kayitListesi li[class*="tur-"] { border-left: 3px solid var(--tur); padding-left: 6px; color: var(--yazi); }
+@keyframes kayitGeldi { from { opacity: 0; transform: translateX(-12px); } }
+.turEtiketi { border-left: 4px solid var(--tur); padding: 4px 8px; border-radius: 4px; background: color-mix(in srgb, var(--tur) 15%, transparent); }
+.turYazi { color: var(--tur); font-weight: 700; }
+
+/* ---------- Elde değişenler ---------- */
+.harf.yeniTas { animation: tasGeldi 1.6s ease-out both; }
+@keyframes tasGeldi {
+  0% { transform: scale(0) translateY(-10px); }
+  15% { transform: scale(1.35); box-shadow: 0 0 12px 4px #2ecc71; }
+  30% { transform: scale(1); }
+}
+.harf.gidenTas { animation: tasGitti 1.6s ease-in both; background: #e74c3c; color: #fff; pointer-events: none; }
+@keyframes tasGitti {
+  0% { transform: scale(1.2); opacity: 1; }
+  20% { transform: scale(1.2) rotate(-8deg); opacity: 1; }
+  100% { transform: translateY(-34px) scale(.3) rotate(40deg); opacity: 0; }
+}
+.artiYanip { animation: artiYanip 1.6s ease-out; }
+.eksiYanip { animation: eksiYanip 1.6s ease-out; }
+@keyframes artiYanip { 0%, 40% { color: #2ecc71; font-weight: 700; } }
+@keyframes eksiYanip { 0%, 40% { color: #e74c3c; font-weight: 700; } }
+.puan, .murekkep { position: relative; display: inline-block; }
+.puan.zipla { animation: puanZipla 1.6s ease-out; }
+@keyframes puanZipla { 0% { transform: scale(1); } 12% { transform: scale(1.5); text-shadow: 0 0 12px var(--vurgu); } 30%, 100% { transform: scale(1); } }
+.ucanFark {
+  position: absolute;
+  right: 0;
+  top: -18px;
+  font-size: 13px;
+  font-weight: 800;
+  pointer-events: none;
+  white-space: nowrap;
+  animation: farkUctu 1.6s ease-out both;
+}
+.ucanFark.arti { color: #2ecc71; }
+.ucanFark.eksi { color: #ff6b5b; }
+@keyframes farkUctu { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-26px); opacity: 0; } }
+
+/* Sırası gelen oyuncunun kartı nabız gibi parlar */
+.oyuncuKart.sirada { outline: none; animation: siraParla 1.6s ease-in-out infinite; }
+@keyframes siraParla {
+  0%, 100% { box-shadow: 0 0 0 2px var(--renk), 0 0 6px 0 var(--renk); }
+  50% { box-shadow: 0 0 0 2px var(--renk), 0 0 18px 4px var(--renk); }
+}
+
+/* ---------- Kart oynanınca ortada beliren büyük kart ---------- */
+#kartSahnesi {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle, rgba(0, 0, 0, .45), rgba(0, 0, 0, 0) 60%);
+  cursor: pointer;
+}
+#kartSahnesi.gizli { display: none; }
+.kartGosteri {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  animation: kartUcar 1.9s cubic-bezier(.2, .8, .3, 1) both;
+}
+@keyframes kartUcar {
+  0% { transform: translateY(60vh) rotateY(180deg) scale(.4); opacity: 0; }
+  22% { transform: translateY(0) rotateY(0) scale(1.08); opacity: 1; }
+  30% { transform: scale(1); }
+  82% { transform: scale(1); opacity: 1; }
+  100% { transform: translateY(-30px) scale(.85); opacity: 0; }
+}
+.kartKim, .kartNot {
+  background: rgba(20, 22, 36, .92);
+  border-radius: 12px;
+  padding: 6px 14px;
+  font-size: 17px;
+  text-align: center;
+  max-width: 90vw;
+}
+.kartKim .ok { color: var(--vurgu); font-weight: 800; }
+.kartNot { font-size: 15px; border: 2px solid var(--vurgu); }
+
+/* ---------- Geçiş afişi ---------- */
+#gecisAfisi {
+  position: fixed;
+  left: 50%;
+  top: 34%;
+  z-index: 95;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  text-align: center;
+  animation: afis 2s ease-out both;
+}
+#gecisAfisi.gizli { display: none; }
+#gecisAfisi .afisBaslik {
+  font-size: clamp(34px, 9vw, 72px);
+  font-weight: 900;
+  color: var(--vurgu);
+  letter-spacing: 2px;
+  text-shadow: 0 4px 0 #b8860b, 0 10px 30px rgba(0, 0, 0, .6);
+  white-space: nowrap;
+}
+#gecisAfisi .afisAlt { font-size: 18px; text-shadow: 0 2px 8px #000; }
+#gecisAfisi.kucuk { top: 18%; animation-duration: 1.3s; }
+#gecisAfisi.kucuk .afisBaslik {
+  font-size: clamp(22px, 5vw, 34px);
+  background: rgba(20, 22, 36, .9);
+  border-radius: 14px;
+  padding: 6px 18px;
+  text-shadow: none;
+  color: var(--yazi);
+}
+@keyframes afis {
+  0% { transform: translate(-50%, -50%) scale(.3); opacity: 0; }
+  15% { transform: translate(-50%, -50%) scale(1.12); opacity: 1; }
+  25% { transform: translate(-50%, -50%) scale(1); }
+  80% { opacity: 1; }
+  100% { transform: translate(-50%, -60%) scale(1); opacity: 0; }
+}
+
+/* ---------- Kare bilgisi balonu ---------- */
+#kareBalonu {
+  position: fixed;
+  z-index: 80;
+  max-width: 260px;
+  background: #fff8e1;
+  color: #222;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .45);
+  animation: balonAcil .2s ease-out;
+}
+#kareBalonu.gizli { display: none; }
+@keyframes balonAcil { from { transform: scale(.7); opacity: 0; } }
+
+/* ---------- İlk oyun ipuçları ---------- */
+.ipucuBalonu {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 520px;
+  background: #fff8e1;
+  color: #222;
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 14px;
+  text-align: left;
+  box-shadow: 0 0 0 3px var(--vurgu), 0 6px 18px rgba(0, 0, 0, .4);
+  animation: balonAcil .3s ease-out;
+  pointer-events: auto;
+}
+.ipucuBalonu.gizli { display: none; }
+.ipucuBalonu button { flex-shrink: 0; background: var(--vurgu); color: #222; font-weight: 700; padding: 6px 10px; }
+#final .ipucuBalonu { margin: 0 auto 10px; }
+
+/* ---------- 📖 Rehber ve kart detayı ---------- */
+.rehberBtn { margin: 4px 0 12px; }
+.pencere .kartYuz.buyuk { margin: 0 auto 6px; }
+#bilgiPencere { max-height: 90vh; overflow-y: auto; }
+#bilgiPencere.genis { max-width: 760px; width: 100%; text-align: left; }
+.sekmeler { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.sekmeler button.secili { background: var(--vurgu); color: #222; font-weight: 700; }
+.rehberIcerik h3 { margin-top: 4px; }
+.rehberIcerik li { margin-bottom: 6px; }
+.rehberKartlari { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.rehberKart { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.rehberKart p { font-size: 12px; color: var(--soluk); margin: 6px 0 0; }
+.kareListesi { display: flex; flex-direction: column; gap: 10px; }
+.kareSatiri { display: flex; align-items: center; gap: 12px; }
+.kareOrnek {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  background: #3c4266;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, .35);
+}
+.sayfaGezinti { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
+.ornekSatir { display: flex; align-items: center; gap: 4px; justify-content: center; font-size: 16px; }
+.ornekSatir .harf { width: 34px; height: 34px; font-size: 18px; }
+.turListesi { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+
+@media (max-width: 760px) {
+  .kartYuz { width: 96px; min-height: 118px; }
+  .kartIkon { font-size: 32px; }
+  .kartYuz.mini { width: 54px; }
+  .kartYuz.buyuk { width: 150px; min-height: 180px; }
+  .kartYuz.buyuk .kartIkon { font-size: 58px; }
+  #bilgiPencere { padding: 16px; }
+  .ipucuBalonu { font-size: 13px; }
+}
+
+/* Kapalı müzik düğmesi soluk görünür */
+.ustBar button.kapali { opacity: .4; }

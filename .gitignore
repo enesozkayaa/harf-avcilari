@@ -1,2 +1,12 @@
 # Ham kelime listesi (9 MB): oyun bunu değil, ondan üretilen kelimeler.js'i kullanır
 kaynak/
+
+# PWABuilder'ın APK paketi: içinde GİZLİ imza anahtarı var, asla GitHub'a gitmemeli
+*Google Play package*/
+*Google Play package*.zip
+*.zip
+*.keystore
+*.jks
+*.apk
+*.aab
+signing-key-info.txt

@@ -251,3 +251,85 @@ function sesiAcKapa() {
   sesButonunuGuncelle();
   if (sesAcik) sesCal('harfSec');
 }
+
+// ---------- 🎵 Arka plan müziği ----------
+// Müzik de dosya değil: yumuşak akorlar ve ara sıra çalan pentatonik notalardan anında üretilir.
+// Efekt seslerinden ayrı açılıp kapanır, varsayılan olarak kapalıdır.
+const MUZIK_ANAHTARI = 'harfAvcilari.muzik';
+const MUZIK_SEVIYESI = 0.035;
+const MUZIK_VURUS_SN = 0.45;  // bir vuruşun süresi (tempo)
+// Do - La minör - Fa - Sol: sıcak, tekrar eden bir döngü
+const MUZIK_AKORLARI = [[262, 330, 392], [220, 262, 330], [175, 220, 262], [196, 247, 294]];
+const MUZIK_MELODI = [523, 587, 659, 784, 880, 1047];
+let muzikAcik = false;
+let muzikZamanlayici = null;
+let muzikVurusu = 0;
+
+try {
+  muzikAcik = localStorage.getItem(MUZIK_ANAHTARI) === 'acik';
+} catch (e) { /* hatırlanamazsa kapalı başlar */ }
+
+function muzikNotasi(frekans, { gecikme = 0, sure = 1, seviye = MUZIK_SEVIYESI, tip = 'sine' } = {}) {
+  sesBaglami ??= new (window.AudioContext || window.webkitAudioContext)();
+  const ctx = sesBaglami;
+  if (ctx.state === 'suspended') ctx.resume();
+  const t = ctx.currentTime + gecikme;
+  const osc = ctx.createOscillator();
+  const kazanc = ctx.createGain();
+  osc.type = tip;
+  osc.frequency.value = frekans;
+  // Yavaş girip yavaş söner: arkada usulca durur
+  kazanc.gain.setValueAtTime(0.0001, t);
+  kazanc.gain.exponentialRampToValueAtTime(seviye, t + Math.min(0.15, sure / 3));
+  kazanc.gain.exponentialRampToValueAtTime(0.0001, t + sure);
+  osc.connect(kazanc).connect(ctx.destination);
+  osc.start(t);
+  osc.stop(t + sure + 0.05);
+}
+
+// Her vuruşta: 8 vuruşta bir akor değişir, arada rastgele melodi notaları çalar
+function muzikVurusuCal() {
+  const akor = MUZIK_AKORLARI[Math.floor(muzikVurusu / 8) % MUZIK_AKORLARI.length];
+  if (muzikVurusu % 8 === 0) {
+    muzikNotasi(akor[0] / 2, { sure: MUZIK_VURUS_SN * 8, seviye: MUZIK_SEVIYESI * 1.2, tip: 'triangle' });
+    akor.forEach((f, i) => muzikNotasi(f, { gecikme: i * 0.04, sure: MUZIK_VURUS_SN * 7, seviye: MUZIK_SEVIYESI * 0.6 }));
+  }
+  if (muzikVurusu % 2 === 0 && Math.random() < 0.55) {
+    const nota = MUZIK_MELODI[Math.floor(Math.random() * MUZIK_MELODI.length)];
+    muzikNotasi(nota, { sure: MUZIK_VURUS_SN * 2.5, seviye: MUZIK_SEVIYESI * 0.8, tip: 'triangle' });
+  }
+  muzikVurusu++;
+}
+
+function muzigiBaslat() {
+  if (muzikZamanlayici) return;
+  muzikVurusu = 0;
+  muzikZamanlayici = setInterval(muzikVurusuCal, MUZIK_VURUS_SN * 1000);
+  muzikVurusuCal();
+}
+
+function muzigiDurdur() {
+  clearInterval(muzikZamanlayici);
+  muzikZamanlayici = null;
+}
+
+function muzikButonunuGuncelle() {
+  const buton = document.getElementById('muzikBtn');
+  buton.classList.toggle('kapali', !muzikAcik);
+  buton.title = muzikAcik ? 'Müziği kapat' : 'Müziği aç';
+}
+
+function muzigiAcKapa() {
+  muzikAcik = !muzikAcik;
+  try {
+    localStorage.setItem(MUZIK_ANAHTARI, muzikAcik ? 'acik' : 'kapali');
+  } catch (e) { /* hatırlanamazsa sorun değil */ }
+  if (muzikAcik) muzigiBaslat();
+  else muzigiDurdur();
+  muzikButonunuGuncelle();
+}
+
+document.getElementById('muzikBtn').addEventListener('click', muzigiAcKapa);
+muzikButonunuGuncelle();
+// Tarayıcı müziği ancak bir tıklamadan sonra çalar: müzik açık kaldıysa ilk tıklamada başlar
+if (muzikAcik) document.addEventListener('pointerdown', muzigiBaslat, { once: true });

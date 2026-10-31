@@ -5,9 +5,9 @@
 // internet yoksa kaydedilmiş kopya açılır. Online oynamak için yine internet gerekir.
 // =============================================================
 
-const ONBELLEK = 'harf-avcilari-v1';
+const ONBELLEK = 'harf-avcilari-v2';
 const DOSYALAR = [
-  './', 'index.html', 'style.css', 'game.js', 'tahta3d.js', 'ses.js', 'ag.js', 'kelimeler.js',
+  './', 'index.html', 'style.css', 'game.js', 'gorsel.js', 'tahta3d.js', 'ses.js', 'ag.js', 'kelimeler.js',
   'manifest.webmanifest', 'ikonlar/ikon-192.png', 'ikonlar/ikon-512.png',
 ];
 

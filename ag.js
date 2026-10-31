@@ -34,8 +34,9 @@ const KELIME_EYLEMLERI = new Set([
 ]);
 
 // Evde çalışıp misafirde de aynen oynatılan ses/animasyon olayları
-const OLAYLAR = ['sesCal', 'efekt', 'kayit', 'konfeti', 'zarSonucunuGoster', 'zarSonucunuGizle'];
-const TAHTA_OLAYLARI = ['zarAt', 'carkCevir', 'harfToplandi', 'nesneTetiklendi', 'zarlariGoster'];
+const OLAYLAR = ['sesCal', 'efekt', 'kayit', 'konfeti', 'zarSonucunuGoster', 'zarSonucunuGizle',
+  'kartGosterisi', 'gecisAfisi'];
+const TAHTA_OLAYLARI = ['zarAt', 'carkCevir', 'harfToplandi', 'nesneTetiklendi', 'zarlariGoster', 'piyonEfekti'];
 
 // ---------- Hamleler ----------
 // Bu oyuncu bu hamleyi şu an yapabilir mi?
@@ -232,7 +233,10 @@ function durumUygula(m) {
   } else if (m.ekran === 'final' || m.ekran === 'sonuc') {
     ekranGoster(m.ekran);
     $(m.ekran).innerHTML = m.html;
-    if (m.ekran === 'final') finalYetkiAyarla();
+    if (m.ekran === 'final') {
+      finalYetkiAyarla();
+      ipucuKontrol(benimSiram() ? 'kelime' : null, 'kelimeIpucu');
+    }
   }
 }
 

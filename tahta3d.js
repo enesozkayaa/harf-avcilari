@@ -16,6 +16,8 @@
 //   Tahta3D.toplanacaklariGuncelle({kare: h}) → karelerin üstünde dönen harf taşları
 //   Tahta3D.harfToplandi(kareNo, oyuncuNo)    → dönen taş uçup piyona gider
 //   Tahta3D.kareSecimiAc(fonk) / kareSecimiKapat() → tahtada bir kareye tıklatmak için (tuzak kurma)
+//   Tahta3D.kareDokunmasi(fonk)               → seçim modu dışında kareye dokununca (kare bilgisi balonu)
+//   Tahta3D.piyonEfekti(oyuncuNo, tip)        → piyonda kart efekti: patlama, zehir, kalkan, ayna, donus, parilti
 //
 // 3D'de her şey "birim" ile ölçülür: bir kare 1 birim genişliğinde.
 // x sağa, y yukarı, z bize doğru. Tahtanın ortası (0, 0, 0).
@@ -93,6 +95,8 @@ const Tahta3D = (() => {
   const ucanTaslar = [];     // toplanıp piyona uçan harfler
   const buzParcalari = [];   // kırılan buz küplerinden saçılan parçalar
   let kareSecimi = null;     // kare seçme modu açıksa: tıklanınca çağrılacak fonksiyon
+  let kareDokunuldu = null;  // seçim modu yokken kareye dokununca çağrılacak fonksiyon (bilgi balonu)
+  const piyonEfektleri = []; // kart efektleri: saçılan parçacıklar, kalkan küresi, dönen piyon
   let secimIsareti;          // fareyle üstüne gelinen kareyi gösteren turuncu çerçeve
   let uzerindekiKare = null;
 
@@ -865,7 +869,14 @@ const Tahta3D = (() => {
           return;
         }
         const kare = karedeMi(e);
-        if (kare !== null) kareSecimi(kare);
+        if (kare !== null) {
+          kareSecimi(kare);
+          return;
+        }
+        if (kareDokunuldu) {
+          const dokunulan = isinAt(e, kareMeshleri)?.userData.kareNo;
+          if (dokunulan !== undefined) kareDokunuldu(dokunulan, e.clientX, e.clientY);
+        }
       }
     });
     canvas.addEventListener('wheel', e => {
@@ -920,6 +931,7 @@ const Tahta3D = (() => {
     tuzaklariCanlandir(simdi);
     harfTaslariniCanlandir(simdi);
     buzlariCanlandir(simdi);
+    piyonEfektleriniCanlandir(simdi);
     ucanYazilariGuncelle(simdi);
     zarlariGuncelle(simdi);
     carkGuncelle(simdi);
@@ -1176,6 +1188,108 @@ const Tahta3D = (() => {
     }
   }
 
+  // ---------- Kart efektleri: piyonun üstünde kısa bir gösteri ----------
+  // tip: patlama (turuncu parçalar saçılır), zehir (mor kabarcıklar yükselir), parilti (yeşil yıldızcıklar),
+  //      kalkan (mavi küre belirip söner), ayna (gümüş halka döner), donus (piyon fırıl fırıl döner)
+  const PARCACIK_AYARI = {
+    patlama: { renkler: ['#ff7a00', '#ffd166', '#e74c3c'], adet: 26, hiz: 2.6, yukari: 2.2, yercekimi: 7, sure: 900 },
+    zehir:   { renkler: ['#9b59b6', '#6ad66a', '#c39bd3'], adet: 16, hiz: 0.5, yukari: 1.2, yercekimi: -0.6, sure: 1300 },
+    parilti: { renkler: ['#2ecc71', '#ffd166', '#a8f0c0'], adet: 18, hiz: 0.8, yukari: 1.6, yercekimi: -0.4, sure: 1100 },
+  };
+  const EFEKT_SURESI = { kalkan: 1000, ayna: 1100, donus: 900 };
+
+  function piyonEfekti(oyuncuNo, tip) {
+    const p = piyonlar[oyuncuNo];
+    if (!p) return;
+    const simdi = performance.now();
+    const merkez = p.govde.position.clone().add(new THREE.Vector3(0, 0.45, 0));
+    const ayar = PARCACIK_AYARI[tip];
+    if (ayar) {
+      for (let i = 0; i < ayar.adet; i++) {
+        const boy = 0.04 + Math.random() * 0.06;
+        const parca = new THREE.Mesh(
+          tip === 'patlama' ? new THREE.BoxGeometry(boy, boy, boy) : new THREE.SphereGeometry(boy, 8, 6),
+          new THREE.MeshBasicMaterial({ color: ayar.renkler[i % ayar.renkler.length], transparent: true }));
+        parca.position.copy(merkez);
+        sahne.add(parca);
+        const aci = Math.random() * Math.PI * 2;
+        const hiz = ayar.hiz * (0.4 + Math.random() * 0.6);
+        piyonEfektleri.push({
+          tip: 'parca', nesne: parca, baslangic: simdi, sure: ayar.sure * (0.7 + Math.random() * 0.3),
+          yercekimi: ayar.yercekimi,
+          hiz: new THREE.Vector3(Math.cos(aci) * hiz, ayar.yukari * (0.5 + Math.random() * 0.5), Math.sin(aci) * hiz),
+        });
+      }
+      if (tip === 'patlama') {
+        // Patlamanın ortasında bir anlık parlak top
+        const isik = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 12),
+          new THREE.MeshBasicMaterial({ color: '#ffd166', transparent: true, opacity: 0.9 }));
+        isik.position.copy(merkez);
+        sahne.add(isik);
+        piyonEfektleri.push({ tip: 'flas', nesne: isik, baslangic: simdi, sure: 350 });
+      }
+      return;
+    }
+    if (tip === 'kalkan' || tip === 'ayna') {
+      const nesne = tip === 'kalkan'
+        ? new THREE.Mesh(new THREE.SphereGeometry(0.5, 24, 16),
+          new THREE.MeshBasicMaterial({ color: '#4aa8ff', transparent: true, opacity: 0.45, depthWrite: false }))
+        : new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.05, 10, 40),
+          new THREE.MeshStandardMaterial({ color: '#e8eef5', metalness: 0.9, roughness: 0.15, transparent: true }));
+      nesne.position.copy(merkez);
+      sahne.add(nesne);
+      piyonEfektleri.push({ tip, nesne, piyon: p, baslangic: simdi, sure: EFEKT_SURESI[tip] });
+      return;
+    }
+    if (tip === 'donus') {
+      piyonEfektleri.push({ tip, piyon: p, baslangic: simdi, sure: EFEKT_SURESI.donus });
+    }
+  }
+
+  let sonEfektZamani = 0;
+  function piyonEfektleriniCanlandir(simdi) {
+    const dt = Math.min(0.05, (simdi - (sonEfektZamani || simdi)) / 1000);
+    sonEfektZamani = simdi;
+    for (let i = piyonEfektleri.length - 1; i >= 0; i--) {
+      const e = piyonEfektleri[i];
+      const t = Math.min(1, (simdi - e.baslangic) / e.sure);
+      if (e.tip === 'parca') {
+        e.hiz.y -= e.yercekimi * dt;
+        e.nesne.position.addScaledVector(e.hiz, dt);
+        e.nesne.rotation.x += dt * 6;
+        e.nesne.material.opacity = 1 - t;
+      } else if (e.tip === 'flas') {
+        e.nesne.scale.setScalar(1 + t * 1.5);
+        e.nesne.material.opacity = 0.9 * (1 - t);
+      } else if (e.tip === 'kalkan') {
+        // Hızla büyüyüp piyonu sarar, titreşir, sonra söner
+        e.nesne.position.set(e.piyon.govde.position.x, e.piyon.govde.position.y + 0.42, e.piyon.govde.position.z);
+        e.nesne.scale.setScalar(Math.min(1, t * 5) * (1 + Math.sin(t * 30) * 0.04));
+        e.nesne.material.opacity = 0.45 * (t < 0.6 ? 1 : (1 - t) / 0.4);
+      } else if (e.tip === 'ayna') {
+        e.nesne.position.set(e.piyon.govde.position.x, e.piyon.govde.position.y + 0.42, e.piyon.govde.position.z);
+        e.nesne.rotation.y = t * Math.PI * 4;
+        e.nesne.scale.setScalar(Math.min(1, t * 4));
+        e.nesne.material.opacity = t < 0.7 ? 1 : (1 - t) / 0.3;
+      } else if (e.tip === 'donus') {
+        e.piyon.govde.rotation.y = yumusat(t) * Math.PI * 4;
+      }
+      if (t >= 1) {
+        if (e.nesne) {
+          sahne.remove(e.nesne);
+          e.nesne.geometry.dispose();
+          e.nesne.material.dispose();
+        }
+        if (e.tip === 'donus') e.piyon.govde.rotation.y = 0;
+        piyonEfektleri.splice(i, 1);
+      }
+    }
+  }
+
+  function kareDokunmasi(fonk) {
+    kareDokunuldu = fonk;
+  }
+
   function kareSecimiAc(tiklaninca) {
     kareSecimi = tiklaninca;
   }
@@ -1204,5 +1318,6 @@ const Tahta3D = (() => {
     hazirMi, olustur, piyonlariGuncelle, zarlariGoster, zarAt, carkCevir, yolOklari,
     hedefleriIsaretle, ucanYazi, nesneleriGuncelle, nesneTetiklendi, toplanacaklariGuncelle,
     harfToplandi, kareSecimiAc, kareSecimiKapat, zarUstSayilari, carkDegeri,
+    piyonEfekti, kareDokunmasi,
   };
 })();

@@ -462,6 +462,8 @@ function isim(o) {
 function ekranGoster(id) {
   document.querySelectorAll('.ekran').forEach(e => e.classList.add('gizli'));
   $(id).classList.remove('gizli');
+  // Kelime turunda harcanan harfler tahtaya dönünce "kaybedildi" gibi uçmasın (gorsel.js)
+  if (id !== 'oyun') elIzleriniSifirla();
   durumDegisti();
 }
 
@@ -469,6 +471,9 @@ function ekranGoster(id) {
 function kayit(metin) {
   const li = document.createElement('li');
   li.innerHTML = metin;
+  // Satırın solundaki renkli çizgi, olayın hangi tür kartla ilgili olduğunu gösterir (gorsel.js)
+  const tur = kayitTuru(metin);
+  if (tur) li.className = `tur-${tur}`;
   $('kayitListesi').prepend(li);
 }
 
@@ -570,6 +575,8 @@ function kartSecimiCiz(acikKartlar) {
         <span>${k.ikon} <b>${k.ad}</b><small>${k.aciklama}</small></span>
       </label>`).join('');
   hepsiniSecDurumu();
+  // gorsel.js bu dosyadan sonra yüklenir; ilk çizimde o henüz yoksa kendisi renklendirir
+  if (typeof kartSecimiRenklendir === 'function') kartSecimiRenklendir();
 }
 
 function kartKutulari() {
@@ -679,6 +686,8 @@ function tahtaEkraniniKur() {
       levha: oyun.tahta.levha,
       kareler: oyun.tahta.kareler.map(k => ({ ...k, ...kareBilgisi(k.tip) })),
     }, kare => eylem('yolSec', kare));
+    // Kareye dokununca ne işe yaradığını anlatan balon (sadece bu cihazda)
+    Tahta3D.kareDokunmasi(kareBilgisiGoster);
   } else {
     tahtayiOlustur();
   }
@@ -1297,6 +1306,7 @@ function korumaVarMi(o, neden, yer) {
   o.kartlar.splice(kalkan, 1);
   kayit(`🛡️ ${isim(o)} kalkanıyla ${neden} kendini korudu!`);
   efekt(yer, '🛡️ Engellendi!', 'kart');
+  piyonEfekti(oyun.oyuncular.indexOf(o), 'kalkan');
   return true;
 }
 
@@ -1413,6 +1423,8 @@ function onZarKartiSec(kartNo) {
     oyun.onKartKullanildi = true;
     kayit(`${bilgi.ikon} ${isim(o)} <b>${bilgi.ad}</b> kullandı`);
     efekt(o.konum, `${bilgi.ikon} ${bilgi.ad}`, 'kart');
+    kartGosterisi(kart, oyun.sira);
+    kartPiyonEfekti(kart, oyun.sira, null);
     sesCal('kartCek');
     oyun.mesaj = `${isim(o)}, şimdi zar at!`;
     kendiKartEtkisi(kart, o);
@@ -1446,6 +1458,8 @@ function secimIptal() {
 function secilenKartiHarca() {
   const kart = aktif().kartlar.splice(oyun.secilenKart, 1)[0];
   oyun.onKartKullanildi = true;
+  kartGosterisi(kart, oyun.sira);
+  kartPiyonEfekti(kart, oyun.sira, null);
   secimiBitir();
   return kart;
 }
@@ -1508,6 +1522,8 @@ function kasirga() {
 
 function yerleriDegistir(o1, o2) {
   [o1.konum, o2.konum] = [o2.konum, o1.konum];
+  piyonEfekti(oyun.oyuncular.indexOf(o1), 'donus');
+  piyonEfekti(oyun.oyuncular.indexOf(o2), 'donus');
   efekt(o1.konum, '🔄', 'kart');
   efekt(o2.konum, '🔄', 'kart');
 }
@@ -1572,6 +1588,7 @@ function harfVergisi(o) {
     o.harfler.push(h);
     kayit(`📜 ${isim(r)} vergi olarak <b>${harfinKendisi(h)}</b> verdi`);
     efekt(r.konum, `📜 −${harfinKendisi(h)}`, 'ceza');
+    piyonEfekti(oyun.oyuncular.indexOf(r), 'zehir');
   });
   sesCal('toplama');
 }
@@ -1584,6 +1601,7 @@ function harfBombasi(o) {
     const h = rastgeleHarfAl(r);
     kayit(`💣 ${isim(r)} <b>${harfinKendisi(h)}</b> harfini kaybetti`);
     efekt(r.konum, `💣 −${harfinKendisi(h)}`, 'ceza');
+    piyonEfekti(oyun.oyuncular.indexOf(r), 'patlama');
   });
 }
 
@@ -1674,15 +1692,22 @@ function saldiriHedefSec(hedefNo) {
     kayit(`🪞 ${isim(hedef)} aynayla kartı ${isim(saldiran)} oyuncusuna geri yansıttı!`);
     efekt(hedef.konum, '🪞 Yansıdı!', 'kart');
     efekt(saldiran.konum, `${bilgi.ikon} ${bilgi.ad}`, 'kart');
+    kartGosterisi(kart, oyun.sira, hedefNo, `🪞 ${isim(hedef)} aynayla geri yansıttı! Kart ${isim(saldiran)} oyuncusuna döndü.`);
+    piyonEfekti(hedefNo, 'ayna');
+    kartPiyonEfekti(kart, hedefNo, oyun.sira);
     sesCal('kalkan');
     sonuc = kartEtkisi(kart, hedef, saldiran);
   } else if (kalkan !== -1) {
     hedef.kartlar.splice(kalkan, 1);
     kayit(`🛡️ ${isim(hedef)} kalkanla engelledi!`);
     efekt(hedef.konum, `${bilgi.ikon} ${bilgi.ad} → 🛡️ Engellendi!`, 'kart');
+    kartGosterisi(kart, oyun.sira, hedefNo, `🛡️ ${isim(hedef)} kalkanla engelledi! Hiçbir şey olmadı.`);
+    piyonEfekti(hedefNo, 'kalkan');
     sesCal('kalkan');
   } else {
     efekt(hedef.konum, `${bilgi.ikon} ${bilgi.ad}`, 'kart');
+    kartGosterisi(kart, oyun.sira, hedefNo);
+    kartPiyonEfekti(kart, oyun.sira, hedefNo);
     sesCal('saldiri');
     sonuc = kartEtkisi(kart, saldiran, hedef);
   }
@@ -1858,6 +1883,8 @@ function ciz() {
   }
   saldiriPaneliniCiz();
   oyuncuListesiniCiz();
+  ipucuKontrol(tahtaIpucuSec(), 'ipucuBalonu');
+  siraAfisiKontrol();
   durumDegisti();
 }
 
@@ -1923,21 +1950,18 @@ function saldiriPaneliniCiz() {
   if (oyun.faz === 'casusSecimi') {
     const hedef = oyun.oyuncular[oyun.casusluk.hedef];
     panel.innerHTML = `<p class="adim">🕵️ ${guvenli(hedef.ad)} oyuncusunun kartları — hangisi çöpe gitsin?</p>`
-      + hedef.kartlar.map((k, kNo) => `<button class="kartBtn" title="${KARTLAR[k].aciklama}"
-          onclick="eylem('casusAt', ${kNo})">${KARTLAR[k].ikon} ${KARTLAR[k].ad}</button>`).join('');
+      + `<div class="kartSirasi">${hedef.kartlar.map((k, kNo) => kartYuzu(k, { tikla: `eylem('casusAt', ${kNo})` })).join('')}</div>`;
     return;
   }
   if (oyun.faz === 'market') {
     const indirimli = o.kartlar.includes('indirim');
     panel.innerHTML = `<p class="adim">🏪 Market · 🖋️ ${o.murekkep} mürekkebin var${indirimli ? ' · 🏷️ indirim: fiyatlar yarıya!' : ''}</p>`
-      + oyun.market.secenekler.map((k, i) => {
-        const b = KARTLAR[k];
+      + `<div class="kartSirasi">${oyun.market.secenekler.map((k, i) => {
         const fiyat = marketFiyati(o, k);
         const alinabilir = marketteAlinabilir(o, k);
-        const neden = alinabilir ? b.aciklama : o.murekkep < fiyat ? 'Mürekkebin yetmiyor' : `Elinde zaten ${MAX_KART} kart var`;
-        return `<button class="kartBtn marketKarti" title="${neden}" ${alinabilir ? '' : 'disabled'}
-                  onclick="eylem('marketAl', ${i})">${b.ikon} ${b.ad}<span class="fiyat">${fiyat} 🖋️</span></button>`;
-      }).join('')
+        const neden = alinabilir ? KARTLAR[k].aciklama : o.murekkep < fiyat ? 'Mürekkebin yetmiyor' : `Elinde zaten ${MAX_KART} kart var`;
+        return kartYuzu(k, { tikla: `eylem('marketAl', ${i})`, fiyat, kapali: !alinabilir, ipucu: neden });
+      }).join('')}</div>`
       + `<button onclick="eylem('marketKapat')">Almıyorum →</button>`;
     return;
   }
@@ -1950,25 +1974,19 @@ function saldiriPaneliniCiz() {
   // Genişletilmiş tahta: zar atmadan önce elindeki kartlar (istersen kullan, istersen direkt zar at)
   if (onZarSecimi) {
     panel.innerHTML = '<p class="adim">🃏 Zar atmadan önce bir kart oynayabilirsin — istemezsen direkt zar at:</p>'
-      + o.kartlar.map((k, kNo) => {
-        if (KARTLAR[k].pasif) return '';
-        const b = KARTLAR[k];
-        return `<button class="kartBtn" title="${b.aciklama}" onclick="eylem('onZarKartiSec', ${kNo})">${b.ikon} ${b.ad}</button>`;
-      }).join('');
+      + `<div class="kartSirasi">${o.kartlar.map((k, kNo) => (KARTLAR[k].pasif ? ''
+        : kartYuzu(k, { tikla: `eylem('onZarKartiSec', ${kNo})` }))).join('')}</div>`;
     return;
   }
 
   if (oyun.secilenKart === null) {
     panel.innerHTML = '<p class="adim">1) Hangi kartı kullanacaksın?</p>'
-      + o.kartlar.map((k, kNo) => {
-        if (KARTLAR[k].pasif || KARTLAR[k].kendine) return '';
-        const b = KARTLAR[k];
-        return `<button class="kartBtn" title="${b.aciklama}" onclick="eylem('saldiriKartSec', ${kNo})">${b.ikon} ${b.ad}</button>`;
-      }).join('')
+      + `<div class="kartSirasi">${o.kartlar.map((k, kNo) => (KARTLAR[k].pasif || KARTLAR[k].kendine ? ''
+        : kartYuzu(k, { tikla: `eylem('saldiriKartSec', ${kNo})` }))).join('')}</div>`
       + `<button onclick="eylem('saldiriVazgec')">Saklarım, kullanmıyorum</button>`;
   } else {
     const b = KARTLAR[o.kartlar[oyun.secilenKart]];
-    panel.innerHTML = `<p class="adim">2) ${b.ikon} ${b.ad} kime?</p>`
+    panel.innerHTML = `<p class="adim">2) ${b.ikon} ${b.ad} kime? <span class="soluk kucuk">(${kartKisa(o.kartlar[oyun.secilenKart])})</span></p>`
       + oyun.oyuncular.map((r, rNo) => r === o ? '' : `
         <button class="kartBtn" style="border-color:${r.renk}" onclick="eylem('saldiriHedefSec', ${rNo})">
           ${guvenli(r.ad)} (${r.harfler.length} harf, ${r.kartlar.length} kart)${r.kartlar.includes('kalkan') ? ' 🛡️' : ''}${r.kartlar.includes('ayna') ? ' 🪞' : ''}
@@ -1994,15 +2012,23 @@ function durumRozetleri(o) {
 function oyuncuListesiniCiz() {
   $('oyuncuListesi').innerHTML = oyun.oyuncular.map((o, i) => {
     const gizli = online() && i !== AG.benimNo;
-    const harfler = gizli ? `<i class="soluk">🔒 ${o.harfler.length} harf</i>`
-      : o.harfler.map(harfTasi).join('') || '<i class="soluk">harf yok</i>';
-    const kartlar = gizli ? `<i class="soluk">🃏 ${o.kartlar.length} kart</i>`
-      : o.kartlar.map(k => `<span title="${KARTLAR[k].aciklama}">${KARTLAR[k].ikon} ${KARTLAR[k].ad}</span>`).join('')
+    // Yeni gelen taş/kart parlar, giden taş kırmızı uçar, puan değişince sayı zıplar (gorsel.js)
+    const iz = elDegisiminiIzle(o, i);
+    const harfler = gizli ? gizliSayac(`🔒 ${o.harfler.length} harf`, iz)
+      : elHarfleriniCiz(o, iz) || '<i class="soluk">harf yok</i>';
+    const yeniKartlar = [...iz.yeniKart];
+    const yeniMi = k => {
+      const j = yeniKartlar.findIndex(y => y.x === k);
+      return j !== -1 && yeniKartlar.splice(j, 1).length > 0;
+    };
+    const kartlar = gizli ? o.kartlar.map(k => kartArkasi(yeniMi(k))).join('') || '<i class="soluk">kart yok</i>'
+      : o.kartlar.map(k => kartYuzu(k, { mini: true, yeni: yeniMi(k) })).join('')
         || '<i class="soluk">kart yok</i>';
+    const puanSinifi = iz.puanDegisim ? ' zipla' : '';
     return `
-    <div class="oyuncuKart ${i === oyun.sira ? 'sirada' : ''}" style="border-color:${o.renk}">
+    <div class="oyuncuKart ${i === oyun.sira ? 'sirada' : ''}" style="border-color:${o.renk};--renk:${o.renk}">
       <div class="oyuncuUst">${isim(o)}${online() && i === AG.benimNo ? ' <small class="soluk">(sen)</small>' : ''}
-        <span>${oyun.tahta.ekonomi ? `<span class="murekkep">🖋️ ${o.murekkep}</span> ` : ''}<span class="puan">⭐ ${o.puan}</span></span>
+        <span>${oyun.tahta.ekonomi ? `<span class="murekkep">🖋️ ${o.murekkep}${degisimRozeti(iz.murekkepDegisim)}</span> ` : ''}<span class="puan${puanSinifi}" ${iz.puanDegisim ? `style="${animGecikme(iz.puanDegisim.t)}"` : ''}>⭐ ${o.puan}${degisimRozeti(iz.puanDegisim)}</span></span>
       </div>
       <div class="rozetler">${durumRozetleri(o)}</div>
       <div class="harfler">${harfler}</div>
@@ -2026,6 +2052,7 @@ function kelimeTurunaGec() {
     o.gecersiz = false;
   });
   ekranGoster('final');
+  gecisAfisi('📝 KELİME TURU!', 'Harflerinle en değerli kelimeni kur');
   finalOyuncusunuBaslat();
 }
 
@@ -2107,6 +2134,7 @@ function finalCiz() {
     + ALFABE.map(h => `<button onclick="eylem('jokerHarfiSec', '${h}')">${h}</button>`).join('')
     + `<button onclick="eylem('jokerIptal')">İptal</button>`;
   finalYetkiAyarla();
+  ipucuKontrol(benimSiram() ? 'kelime' : null, 'kelimeIpucu');
   durumDegisti();
 }
 

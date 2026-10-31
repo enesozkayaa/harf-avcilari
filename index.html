@@ -18,6 +18,7 @@
   <section id="kurulum" class="ekran">
     <h1>🔤 Harf Avcıları</h1>
     <p class="soluk">Zar at, harf topla, rakiplerine kart oyna. Belirli turlarda harflerinle kelime kurup puan kazan. Hedef puana ilk ulaşan kazanır!</p>
+    <button id="rehberBtn" class="rehberBtn">❓ Nasıl oynanır? · Kartlar · Kareler</button>
     <!-- 🌐 Online: biri oda açar, diğeri kodla katılır (bağlantı ag.js'te) -->
     <fieldset class="onlineKutu">
       <legend>🌐 Online oyna (2 kişi)</legend>
@@ -80,6 +81,8 @@
       <span id="siraBilgisi"></span>
       <span id="hedefBilgisi"></span>
       <span>
+        <button id="rehberUstBtn" title="Nasıl oynanır? Kartlar ve kareler">❓</button>
+        <button id="muzikBtn">🎵</button>
         <button id="sesBtn">🔊</button>
         <button id="menuBtn">🏠 Ana Menü</button>
       </span>
@@ -94,6 +97,8 @@
           </div>
           <!-- Kontroller: 3D modda game.js bunları 3D sahnenin üstüne taşır -->
           <div id="kontroller">
+            <!-- İlk oyunda bir kez çıkan ipucu balonları (gorsel.js) -->
+            <div id="ipucuBalonu" class="ipucuBalonu gizli"></div>
             <!-- Zar sonucu: büyük sayı + kart etkileri (🎭 Hileli zar!, 🎲 −2, ⏫ +3) -->
             <div class="zarSatiri">
               <div id="zarSonucu" class="gizli"><span class="sayi">0</span><span class="etiket"></span></div>
@@ -125,6 +130,7 @@
   <!-- 3) KELİME TURU EKRANI: herkes sırayla kelimesini kurar -->
   <section id="final" class="ekran gizli">
     <h2 id="finalBaslik"></h2>
+    <div id="kelimeIpucu" class="ipucuBalonu gizli"></div>
     <div class="sureKutusu">⏱️ <span id="sure">60</span> sn</div>
     <div id="kelime" class="kelime">…</div>
     <div id="onPuan" class="soluk"></div>
@@ -164,6 +170,17 @@
     </div>
   </section>
 
+  <!-- Kart oynanınca ortada beliren büyük kart (gorsel.js) -->
+  <div id="kartSahnesi" class="gizli"></div>
+  <!-- "KELİME TURU!", "Sıra sende!" gibi kısa afişler -->
+  <div id="gecisAfisi" class="gizli"></div>
+  <!-- Tahtada kareye dokununca çıkan bilgi balonu -->
+  <div id="kareBalonu" class="gizli"></div>
+  <!-- Kart detayı ve Nasıl oynanır? rehberi -->
+  <div id="bilgiPerde" class="perde gizli">
+    <div id="bilgiPencere" class="pencere"><div id="bilgiIcerik"></div></div>
+  </div>
+
   <!-- Online bağlantı koptuğunda -->
   <div id="baglantiKoptu" class="perde gizli">
     <div class="pencere">
@@ -200,6 +217,8 @@
   <!-- TDK kelime listesi (araclar/kelime_listesi_olustur.js ile üretilir). Yoksa oyun oylamayla çalışır. -->
   <script src="kelimeler.js"></script>
   <script src="game.js"></script>
+  <!-- Kart yüzleri, animasyonlar, rehber ve ipuçları -->
+  <script src="gorsel.js"></script>
   <!-- Online oyun: PeerJS iki cihazı doğrudan bağlar; ag.js oda açma/katılma ve senkronizasyonu yapar -->
   <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="ag.js"></script>
