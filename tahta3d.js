@@ -751,15 +751,27 @@ const Tahta3D = (() => {
   }
 
   // ---------- Kamera ve fare ----------
+  // Normalde kamera tahtanın ortasına bakar ve sırası gelen piyona biraz kayar.
+  // Oyuncu yakınlaştırır, kaydırır ya da bir yere çift dokunursa kamera "serbest" olur:
+  // o noktaya bakar ve piyonu takip etmez. ⟲ düğmesi ilk görünüşe döndürür.
+  let serbestKamera = false;
+  let serbestHedef;
+  let odakNoktasi = null;   // son çift tıklanan nokta (ikinci kez tıklanınca ilk görünüşe dönülür)
+
   function kameraGuncelle() {
-    // Hedef nokta, aktif piyona doğru biraz kayar (yavaşça, her karede %4)
-    const aktif = piyonlar[aktifNo];
-    const istenen = hedefKaydirma.clone();
-    if (aktif) {
-      istenen.x += aktif.govde.position.x * KAMERA_TAKIP;
-      istenen.z += aktif.govde.position.z * KAMERA_TAKIP;
+    let istenen;
+    if (serbestKamera) {
+      istenen = serbestHedef;
+    } else {
+      // Hedef nokta, aktif piyona doğru biraz kayar (yavaşça, her karede %4)
+      const aktif = piyonlar[aktifNo];
+      istenen = hedefKaydirma.clone();
+      if (aktif) {
+        istenen.x += aktif.govde.position.x * KAMERA_TAKIP;
+        istenen.z += aktif.govde.position.z * KAMERA_TAKIP;
+      }
     }
-    kameraHedefi.lerp(istenen, 0.04);
+    kameraHedefi.lerp(istenen, serbestKamera ? 0.2 : 0.04);
 
     const { aci, egim, uzaklik } = yorunge;
     kamera.position.set(
@@ -770,7 +782,42 @@ const Tahta3D = (() => {
     kamera.lookAt(kameraHedefi);
   }
 
-  // Farenin altındaki ilk nesneyi bulur (yoksa undefined)
+  // Ekrandaki bir noktanın (x, y) altındaki tahta yüzeyi noktası
+  const tahtaDuzlemi = new THREE.Plane(new THREE.Vector3(0, 1, 0), -KARO_UST);
+  function ekrandanTahtaya(x, y) {
+    const kutu = cizici.domElement.getBoundingClientRect();
+    const isin = new THREE.Raycaster();
+    isin.setFromCamera(new THREE.Vector2(
+      ((x - kutu.left) / kutu.width) * 2 - 1,
+      -((y - kutu.top) / kutu.height) * 2 + 1,
+    ), kamera);
+    const nokta = new THREE.Vector3();
+    return isin.ray.intersectPlane(tahtaDuzlemi, nokta) ? nokta : null;
+  }
+
+  // Kameranın bakacağı nokta tahtadan çok uzaklaşmasın
+  function hedefiSinirla(h) {
+    const yariG = tahta.genislik / 2 + 1;
+    const yariY = tahta.yukseklik / 2 + 1;
+    h.x = Math.min(yariG, Math.max(-yariG, h.x));
+    h.z = Math.min(yariY, Math.max(-yariY, h.z));
+    h.y = 0;
+    return h;
+  }
+
+  function serbesteGec() {
+    if (!serbestKamera) serbestHedef = kameraHedefi.clone();
+    serbestKamera = true;
+    sifirlaDugmesi?.classList.remove('gizli');
+  }
+
+  function kamerayiSifirla() {
+    serbestKamera = false;
+    elleYakinlastirildi = false;
+    Object.assign(yorunge, varsayilanYorunge);
+    sifirlaDugmesi?.classList.add('gizli');
+  }
+
   function isinAt(e, nesneler) {
     if (!nesneler.length) return undefined;
     const kutu = cizici.domElement.getBoundingClientRect();
@@ -786,37 +833,93 @@ const Tahta3D = (() => {
   const oktaMi = e => isinAt(e, oklar)?.parent.userData.hedefKare ?? null;
   const karedeMi = e => (kareSecimi ? isinAt(e, kareMeshleri)?.userData.kareNo ?? null : null);
 
-  // Fare ve dokunmatik: tek parmak/fare sürükleyince döner, iki parmakla kıstırınca yakınlaşır
   let elleYakinlastirildi = false;  // oyuncu kendisi yakınlaştırdıysa ekran döndüğünde bozmayalım
-  const yakinlastir = oran => {
-    elleYakinlastirildi = true;
-    yorunge.uzaklik = Math.min(30, Math.max(6, yorunge.uzaklik * oran));
-  };
+  let sifirlaDugmesi;
+  const EN_YAKIN = 4;
+  const EN_UZAK = 30;
 
+  // Yakınlaştırma ekrandaki (x, y) noktasına doğru olur: o nokta parmağın/imlecin altında kalır
+  function noktayaYakinlastir(oran, x, y) {
+    const eski = yorunge.uzaklik;
+    const yeni = Math.min(EN_UZAK, Math.max(EN_YAKIN, eski * oran));
+    if (yeni === eski) return;
+    elleYakinlastirildi = true;
+    const p = ekrandanTahtaya(x, y);
+    yorunge.uzaklik = yeni;
+    if (!p) return;
+    serbesteGec();
+    // Hedef, P noktasına yakınlaşma oranı kadar yaklaşır (uzaklaşırken uzaklaşır)
+    const merkez = kameraHedefi.clone();
+    serbestHedef = hedefiSinirla(p.clone().add(merkez.sub(p).multiplyScalar(yeni / eski)));
+    kameraHedefi.copy(serbestHedef);
+  }
+
+  // Ekranda (x1,y1)'den (x2,y2)'ye kaydırınca tahta da parmakla birlikte kayar
+  function kaydir(x1, y1, x2, y2) {
+    const a = ekrandanTahtaya(x1, y1);
+    const b = ekrandanTahtaya(x2, y2);
+    if (!a || !b) return;
+    serbesteGec();
+    serbestHedef = hedefiSinirla(serbestHedef.clone().add(a.sub(b)));
+    kameraHedefi.copy(serbestHedef);
+  }
+
+  // Çift tık / çift dokunuş: o noktaya yakınlaş. Zaten oraya yakınsa ilk görünüşe dön.
+  function noktayaOdaklan(x, y) {
+    const p = ekrandanTahtaya(x, y);
+    if (!p) return;
+    const yakin = Math.max(EN_YAKIN, varsayilanYorunge.uzaklik * 0.5);
+    if (serbestKamera && yorunge.uzaklik <= yakin * 1.05 && odakNoktasi && p.distanceTo(odakNoktasi) < 1.5) {
+      kamerayiSifirla();
+      return;
+    }
+    serbesteGec();
+    odakNoktasi = p.clone();
+    // Nokta ekranın tam ortasına değil biraz üstüne gelsin (alttaki kontrol panelinin altında kalmasın):
+    // kameranın baktığı yer, kameraya doğru biraz kaydırılır
+    const kayma = hedefKaydirma.length() * (yakin / varsayilanYorunge.uzaklik);
+    serbestHedef = hedefiSinirla(p.add(new THREE.Vector3(Math.sin(yorunge.aci), 0, Math.cos(yorunge.aci)).multiplyScalar(kayma)));
+    yorunge.uzaklik = yakin;
+    elleYakinlastirildi = true;
+  }
+
+  // Fare: sürükle = döndür, sağ tık (ya da Shift) ile sürükle = kaydır, tekerlek = imlece yakınlaş.
+  // Dokunmatik: tek parmak = döndür, iki parmak = kıstırıp yakınlaş ve birlikte kaydır.
+  // Çift tık / çift dokunuş = o noktaya yakınlaş.
   function fareyiBagla(canvas) {
     let surukleniyor = false;
+    let kaydiriliyor = false;
     let basX = 0;
     let basY = 0;
     let sonX = 0;
     let sonY = 0;
+    let sonDokunus = { zaman: 0, x: 0, y: 0 };  // çift dokunuşu yakalamak için
     const parmaklar = new Map();  // ekrandaki parmaklar: pointerId → {x, y}
     let kistirma = 0;             // iki parmak arasındaki son uzaklık (0: kıstırma yok)
+    let ortaNokta = null;         // iki parmağın son orta noktası (kaydırma için)
     let kistirildi = false;       // bu dokunuşta kıstırma yapıldıysa bırakınca tıklama sayılmasın
     const parmakAraligi = () => {
       const [a, b] = [...parmaklar.values()];
       return Math.hypot(a.x - b.x, a.y - b.y);
     };
+    const parmakOrtasi = () => {
+      const [a, b] = [...parmaklar.values()];
+      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    };
 
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
     canvas.addEventListener('pointerdown', e => {
       parmaklar.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (parmaklar.size === 2) {
         kistirma = parmakAraligi();
+        ortaNokta = parmakOrtasi();
         kistirildi = true;
         surukleniyor = false;
         return;
       }
       kistirildi = false;
       surukleniyor = true;
+      kaydiriliyor = e.button === 2 || e.shiftKey;
       basX = sonX = e.clientX;
       basY = sonY = e.clientY;
       canvas.setPointerCapture(e.pointerId);
@@ -825,8 +928,11 @@ const Tahta3D = (() => {
       if (parmaklar.has(e.pointerId)) parmaklar.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (parmaklar.size === 2) {
         const aralik = parmakAraligi();
-        if (kistirma && aralik) yakinlastir(kistirma / aralik);
+        const orta = parmakOrtasi();
+        if (kistirma && aralik) noktayaYakinlastir(kistirma / aralik, orta.x, orta.y);
+        if (ortaNokta) kaydir(ortaNokta.x, ortaNokta.y, orta.x, orta.y);
         kistirma = aralik;
+        ortaNokta = orta;
         return;
       }
       if (!surukleniyor) {
@@ -840,20 +946,26 @@ const Tahta3D = (() => {
         canvas.style.cursor = oktaMi(e) !== null || uzerindekiKare !== null ? 'pointer' : '';
         return;
       }
-      yorunge.aci -= (e.clientX - sonX) * 0.008;
-      yorunge.egim = Math.min(1.25, Math.max(0.25, yorunge.egim - (e.clientY - sonY) * 0.006));
+      if (kaydiriliyor) {
+        kaydir(sonX, sonY, e.clientX, e.clientY);
+      } else {
+        yorunge.aci -= (e.clientX - sonX) * 0.008;
+        yorunge.egim = Math.min(1.25, Math.max(0.25, yorunge.egim - (e.clientY - sonY) * 0.006));
+      }
       sonX = e.clientX;
       sonY = e.clientY;
     });
     const birak = e => {
       parmaklar.delete(e.pointerId);
       kistirma = 0;
+      ortaNokta = null;
       // İki parmaktan biri kalktıysa kalan parmakla döndürmeye zıplamadan devam et
       if (parmaklar.size === 1) {
         const [p] = parmaklar.values();
         sonX = p.x;
         sonY = p.y;
         surukleniyor = true;
+        kaydiriliyor = false;
       } else {
         surukleniyor = false;
       }
@@ -861,8 +973,15 @@ const Tahta3D = (() => {
     canvas.addEventListener('pointercancel', birak);
     canvas.addEventListener('pointerup', e => {
       birak(e);
-      // Sürüklemeden bırakıldıysa bu bir tıklamadır: oka ya da (seçim modunda) kareye mi tıklandı?
+      // Sürüklemeden bırakıldıysa bu bir tıklamadır
       if (!kistirildi && !parmaklar.size && Math.hypot(e.clientX - basX, e.clientY - basY) < 8) {
+        const simdi = performance.now();
+        if (simdi - sonDokunus.zaman < 350 && Math.hypot(e.clientX - sonDokunus.x, e.clientY - sonDokunus.y) < 30) {
+          sonDokunus.zaman = 0;
+          noktayaOdaklan(e.clientX, e.clientY);
+          return;
+        }
+        sonDokunus = { zaman: simdi, x: e.clientX, y: e.clientY };
         const hedef = oktaMi(e);
         if (hedef !== null) {
           yolSecildi(hedef);
@@ -881,9 +1000,8 @@ const Tahta3D = (() => {
     });
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
-      yakinlastir(1 + e.deltaY * 0.001);
+      noktayaYakinlastir(1 + e.deltaY * 0.001, e.clientX, e.clientY);
     }, { passive: false });
-    canvas.addEventListener('dblclick', () => Object.assign(yorunge, varsayilanYorunge));
   }
 
   function boyutlandir() {
@@ -984,6 +1102,13 @@ const Tahta3D = (() => {
     sahne.add(secimIsareti);
 
     fareyiBagla(cizici.domElement);
+    // ⟲ Kamerayı ilk görünüşe döndüren düğme (sadece yakınlaştırınca/kaydırınca görünür)
+    sifirlaDugmesi = document.createElement('button');
+    sifirlaDugmesi.className = 'kameraSifirla gizli';
+    sifirlaDugmesi.textContent = '⟲ Tüm tahta';
+    sifirlaDugmesi.title = 'Kamerayı ilk görünüşe döndür';
+    sifirlaDugmesi.addEventListener('click', kamerayiSifirla);
+    kapsayici.appendChild(sifirlaDugmesi);
     new ResizeObserver(boyutlandir).observe(kapsayici);
     boyutlandir();
     requestAnimationFrame(dongu);
