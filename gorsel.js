@@ -514,6 +514,25 @@ function kartSecimiRenklendir() {
   });
 }
 
+// ---------- 😂 Emoji tepkileri (online) ----------
+const TEPKILER = ['👏', '😂', '😱', '😡', '🔥', '👍'];
+
+function tepkiCubugunuCiz() {
+  $('tepkiCubugu').innerHTML = TEPKILER.map(e => `<button onclick="tepkiGonder('${e}')">${e}</button>`).join('');
+}
+
+// Ekranın altından, oyuncunun adıyla birlikte yükselip kaybolan emoji
+function tepkiGoster(oyuncuNo, emoji) {
+  const o = oyun.oyuncular?.[oyuncuNo];
+  if (!o || !TEPKILER.includes(emoji)) return;
+  const el = document.createElement('div');
+  el.className = 'tepki';
+  el.style.left = `${10 + Math.random() * 75}vw`;
+  el.innerHTML = `<span class="tepkiEmoji">${emoji}</span><span class="tepkiAd" style="color:${o.renk}">${guvenli(o.ad)}</span>`;
+  $('tepkiAlani').appendChild(el);
+  el.addEventListener('animationend', () => el.remove());
+}
+
 // ---------- Bağlantılar ----------
 $('bilgiPerde').addEventListener('click', e => {
   if (e.target.id === 'bilgiPerde') bilgiKapat();
@@ -523,3 +542,4 @@ $('kareBalonu').addEventListener('click', () => $('kareBalonu').classList.add('g
 $('rehberBtn').addEventListener('click', () => rehberAc());
 $('rehberUstBtn').addEventListener('click', () => rehberAc());
 kartSecimiRenklendir();
+tepkiCubugunuCiz();

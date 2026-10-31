@@ -882,3 +882,40 @@ button.kartYuz:hover:not(:disabled) { transform: translateY(-4px) rotate(-1.5deg
 /* Oda kodu üst barda; son odaya dönüş düğmesi */
 #odaBilgisi { color: var(--vurgu); letter-spacing: 1px; }
 #sonOdaBtn { width: 100%; }
+
+/* 😂 Emoji tepkileri: sağ altta çubuk, basılan emoji ekranın altından yükselir */
+#tepkiCubugu {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 60;
+  display: flex;
+  gap: 4px;
+  background: rgba(20, 22, 36, .85);
+  border-radius: 999px;
+  padding: 4px 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .4);
+}
+#tepkiCubugu button { background: none; font-size: 22px; padding: 4px; line-height: 1; }
+#tepkiCubugu button:active { transform: scale(1.3); }
+#tepkiAlani { position: fixed; inset: 0; pointer-events: none; z-index: 85; overflow: hidden; }
+.tepki {
+  position: absolute;
+  bottom: -60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: tepkiUcar 2.6s ease-out forwards;
+}
+.tepkiEmoji { font-size: 46px; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .5)); }
+.tepkiAd { font-size: 13px; font-weight: 800; text-shadow: 0 1px 3px #000; }
+@keyframes tepkiUcar {
+  0% { transform: translateY(0) scale(.5); opacity: 0; }
+  15% { opacity: 1; transform: translateY(-20vh) scale(1.15); }
+  100% { transform: translateY(-75vh) scale(1) rotate(12deg); opacity: 0; }
+}
+#kayitDevamBtn { width: 100%; margin-bottom: 12px; }
+@media (max-width: 760px) {
+  #tepkiCubugu { right: 50%; transform: translateX(50%); bottom: 8px; }
+  #tepkiCubugu button { font-size: 20px; }
+}

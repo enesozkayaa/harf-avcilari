@@ -612,7 +612,8 @@ function oyunuBaslat() {
     alert('Oyunda en az bir kart olmalı. Lütfen kart seç.');
     return;
   }
-  oyun.tahta = tahtaKur(TAHTALAR[$('tahtaSecimi').value]);
+  oyun.tahtaTipi = $('tahtaSecimi').value;
+  oyun.tahta = tahtaKur(TAHTALAR[oyun.tahtaTipi]);
   // Zar öncesi kart kullanımı olmayan tahtada "kendine" kartlar işe yaramaz, desteye girmez
   oyun.kartAgirlik = Object.fromEntries(kartlar
     .filter(k => oyun.tahta.onZarKartlari || !KARTLAR[k].sadeceGenis)
@@ -806,6 +807,7 @@ function zarKupunuOlustur() {
 // ---------- 5) TUR AKIŞI ----------
 // Bir sıra: zar at → zar döner → piyon zıplar → karenin etkisi → sıra geçer
 function sirayiBaslat() {
+  oyunuKaydet();  // 💾 her tur başında oyun telefona kaydedilir
   oyun.faz = 'zar';
   oyun.onKartKullanildi = false;
   oyun.hedefler = [];
@@ -1958,6 +1960,7 @@ function ciz() {
   oyuncuListesiniCiz();
   ipucuKontrol(tahtaIpucuSec(), 'ipucuBalonu');
   siraAfisiKontrol();
+  $('tepkiCubugu').classList.toggle('gizli', !online());
   durumDegisti();
 }
 
@@ -2380,6 +2383,7 @@ function araSonucuGoster() {
   const bitti = enYuksek >= oyun.hedefPuan;
 
   if (bitti) {
+    kayitliOyunuSil();  // oyun bitti, devam edilecek bir şey kalmadı
     const kazananlar = sirali.filter(o => o.puan === enYuksek);
     $('kazanan').innerHTML = `🏆 Kazanan: ${kazananlar.map(isim).join(' ve ')}`;
     sesCal('kazanma');
@@ -2445,6 +2449,63 @@ function tahtayaDevam() {
   sirayiBaslat();
 }
 
+// ---------- 💾 Yarım kalan oyun ----------
+// Her tur başında oyunun tamamı telefona kaydedilir. Uygulama kapanırsa ana menüde
+// "Yarım kalan oyuna devam et" çıkar; oyun o turun başından sürer.
+// Online oyunda oda aynı kodla yeniden açılır, arkadaşlar aynı adla geri girer.
+const OYUN_KAYDI = 'harfAvcilari.oyunKaydi';
+const OYUN_KAYDI_SURESI = 24 * 60 * 60 * 1000;  // 1 günden eski kayıt gösterilmez
+
+function oyunuKaydet() {
+  if (AG.mod === 'misafir') return;
+  try {
+    localStorage.setItem(OYUN_KAYDI, JSON.stringify({
+      zaman: Date.now(),
+      odaKodu: AG.mod === 'ev' ? ag.kod : null,
+      // Tahta tanımdan yeniden kurulur; zamanlayıcı ve açık market saklanamaz
+      oyun: JSON.parse(JSON.stringify(oyun, (k, v) => (['tahta', 'sayac', 'market'].includes(k) ? undefined : v))),
+    }));
+  } catch (e) { /* kaydedilemezse oyun yine oynanır */ }
+}
+
+function kayitliOyun() {
+  try {
+    const k = JSON.parse(localStorage.getItem(OYUN_KAYDI));
+    return k?.oyun?.oyuncular && TAHTALAR[k.oyun.tahtaTipi] && Date.now() - k.zaman < OYUN_KAYDI_SURESI ? k : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function kayitliOyunuSil() {
+  try {
+    localStorage.removeItem(OYUN_KAYDI);
+  } catch (e) { /* sorun değil */ }
+}
+
+function kayitliOyunuGoster() {
+  const k = kayitliOyun();
+  if (!k) return;
+  const o = k.oyun;
+  $('kayitDevamBtn').textContent = `💾 Yarım kalan oyuna devam et (Tur ${o.tur} · ${o.oyuncular.map(x => x.ad).join(', ')}`
+    + `${k.odaKodu ? ` · online, oda ${k.odaKodu}` : ''})`;
+  $('kayitDevamBtn').classList.remove('gizli');
+}
+
+function kayitliOyunuYukle() {
+  const k = kayitliOyun();
+  if (!k) return;
+  Object.assign(oyun, k.oyun);
+  oyun.tahta = tahtaKur(TAHTALAR[oyun.tahtaTipi]);
+  oyun.market = null;
+  // Online oyunda arkadaşlar geri girene kadar sıraları atlanır
+  if (k.odaKodu) oyun.oyuncular.forEach((o, i) => { if (i > 0) o.koptu = true; });
+  tahtaEkraniniKur();
+  kayit(`💾 Yarım kalan oyun Tur ${oyun.tur} başından devam ediyor`);
+  if (k.odaKodu) kayittanOdaAc(k.odaKodu, oyun.tahtaTipi);
+  sirayiBaslat();
+}
+
 // ---------- BAŞLANGIÇ: butonları fonksiyonlara bağla ----------
 $('oyuncuSayisi').addEventListener('change', () => isimAlanlariniCiz());
 $('kartSecimi').addEventListener('change', kartSecimiDegisti);
@@ -2458,6 +2519,7 @@ $('menuOnay').addEventListener('click', e => {
 });
 $('sesBtn').addEventListener('click', sesiAcKapa);
 $('zarBtn').addEventListener('click', () => eylem('zarAt'));
+$('kayitDevamBtn').addEventListener('click', kayitliOyunuYukle);
 // Kelime turu ve sonuç ekranı butonlarının işleri index.html'de (onclick) yazılı:
 // online'da misafirin ekranı bu bölümleri evden kopyaladığı için butonlar kopyayla birlikte çalışmalı.
 isimAlanlariniCiz();
@@ -2465,3 +2527,4 @@ kartSecimiCiz();
 ayarlariYukle();
 zarKupunuOlustur();
 sesButonunuGuncelle();
+kayitliOyunuGoster();

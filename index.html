@@ -22,6 +22,8 @@
     <h1>🔤 Harf Avcıları</h1>
     <p class="soluk">Zar at, harf topla, rakiplerine kart oyna. Belirli turlarda harflerinle kelime kurup puan kazan. Hedef puana ilk ulaşan kazanır!</p>
     <button id="rehberBtn" class="rehberBtn">❓ Nasıl oynanır? · Kartlar · Kareler</button>
+    <!-- Yarım kalan oyun telefonda saklanır: uygulama kapansa bile kaldığı yerden devam edilir -->
+    <button id="kayitDevamBtn" class="ana gizli"></button>
     <!-- 🌐 Online: biri oda açar, diğeri kodla katılır (bağlantı ag.js'te) -->
     <fieldset class="onlineKutu">
       <legend>🌐 Online oyna (2–6 kişi)</legend>
@@ -137,6 +139,8 @@
       <h3>Olaylar</h3>
       <ul id="kayitListesi"></ul>
     </aside>
+    <!-- 😂 Online'da emoji tepkileri: basınca herkesin ekranında uçar -->
+    <div id="tepkiCubugu" class="gizli"></div>
   </section>
 
   <!-- 3) KELİME TURU EKRANI: herkes sırayla kelimesini kurar -->
@@ -185,6 +189,7 @@
 
   <!-- Kart oynanınca ortada beliren büyük kart (gorsel.js) -->
   <div id="kartSahnesi" class="gizli"></div>
+  <div id="tepkiAlani"></div>
   <!-- "KELİME TURU!", "Sıra sende!" gibi kısa afişler -->
   <div id="gecisAfisi" class="gizli"></div>
   <!-- Tahtada kareye dokununca çıkan bilgi balonu -->

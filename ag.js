@@ -16,7 +16,7 @@
 
 // Online oyunun sürümü: ev ve misafirlerde aynı olmalı. Online kısmı her değiştiğinde 1 artır;
 // eski sürümle (önbellekte kalmış dosyalarla) gelen oyuncu odaya alınmaz, güncellemesi istenir.
-const SURUM = 6;
+const SURUM = 7;
 const ODA_ONEKI = 'harf-avcilari-oda-';
 const KOD_HARFLERI = 'ABCDEFGHJKLMNPRSTUVYZ23456789';  // karışabilecek O/0, I/1 yok
 const ODA_KODU_UZUNLUK = 5;
@@ -50,7 +50,7 @@ const KELIME_EYLEMLERI = new Set([
 
 // Evde çalışıp misafirlerde de aynen oynatılan ses/animasyon olayları
 const OLAYLAR = ['sesCal', 'efekt', 'kayit', 'konfeti', 'zarSonucunuGoster', 'zarSonucunuGizle',
-  'kartGosterisi', 'gecisAfisi'];
+  'kartGosterisi', 'gecisAfisi', 'tepkiGoster'];
 const TAHTA_OLAYLARI = ['zarAt', 'carkCevir', 'harfToplandi', 'nesneTetiklendi', 'zarlariGoster', 'piyonEfekti'];
 
 // ---------- Hamleler ----------
@@ -224,10 +224,14 @@ function onlineAdi() {
   return ad;
 }
 
-function odaAc() {
-  if (!onlineAdi() || !peerVarMi()) return;
-  const kod = odaKoduUret();
+// devamKodu: yarım kalan oyun devam ederken oda aynı kodla yeniden açılır
+function odaAc(devamKodu = null) {
+  if ((!devamKodu && !onlineAdi()) || !peerVarMi()) return;
+  const kod = devamKodu ?? odaKoduUret();
   onlineDurum('⏳ Oda açılıyor...');
+  try {
+    ag.peer?.destroy();
+  } catch (e) { /* eski deneme zaten kapanmış */ }
   ag.peer = new Peer(ODA_ONEKI + kod);
   ag.peer.on('open', () => {
     if (AG.mod === 'ev') return;  // internet gidip gelince tekrar "open" gelir; oda zaten açık
@@ -237,8 +241,14 @@ function odaAc() {
     $('oyuncuSayisi').disabled = true;
     onlineKilitle();
     odaKodunuGoster(kod);
-    lobiyiCiz();
     nabziBaslat();
+    if (ag.basladi) {
+      kayit(`🔑 Oda yeniden açıldı: <b>${kod}</b>. Arkadaşların "Son odana geri dön"e ya da bu kod ve aynı adla Katıl'a bassın.`);
+      oyunuKaydet();
+      ciz();
+      return;
+    }
+    lobiyiCiz();
   });
   sunucuyaYenidenBaglan(ag.peer);
   ag.peer.on('connection', baglanti => {
@@ -256,9 +266,29 @@ function odaAc() {
     baglanti.on('error', () => misafirKoptu(misafir));
   });
   ag.peer.on('error', e => {
-    if (e.type === 'unavailable-id') odaAc();  // aynı kod kullanılıyormuş, yenisini dene
+    if (e.type === 'unavailable-id') {
+      // Eski oda kodu sunucuda hâlâ duruyorsa biraz bekleyip tekrar denenir, olmazsa yeni kod alınır
+      ag.deneme = (ag.deneme ?? 0) + 1;
+      if (devamKodu && ag.deneme <= 6) setTimeout(() => odaAc(devamKodu), 5000);
+      else odaAc();
+    }
     else if (AG.mod !== 'ev') onlineDurum(`❌ Oda açılamadı (${e.type}). İnternet bağlantını kontrol et.`);
   });
+}
+
+// 💾 Yarım kalan online oyun açıldı: oda aynı kodla, "oyun başlamış" olarak yeniden açılır
+function kayittanOdaAc(kod, tahtaTipi) {
+  ag.basladi = true;
+  ag.tahtaTipi = tahtaTipi;
+  odaAc(kod);
+}
+
+// 😂 Emoji tepkisi: misafir eve gönderir, ev herkese yayar
+function tepkiGonder(emoji) {
+  if (!TEPKILER.includes(emoji) || Date.now() - (ag.sonTepki ?? 0) < 700) return;
+  ag.sonTepki = Date.now();
+  if (AG.mod === 'misafir') gonder({ tip: 'tepki', emoji });
+  else if (AG.mod === 'ev') tepkiGoster(0, emoji);
 }
 
 function reddet(baglanti, neden) {
@@ -329,6 +359,12 @@ function evMesaji(misafir, m) {
     lobiyiCiz();
     onlineDurum(`✅ <b>${guvenli(misafir.ad)}</b> odaya katıldı!<br>` + $('onlineDurum').innerHTML);
     sesCal('bonus');
+    return;
+  }
+  if (m?.tip === 'tepki' && misafir.no !== null && TEPKILER.includes(m.emoji)) {
+    if (Date.now() - (misafir.sonTepki ?? 0) < 600) return;  // art arda basılınca ekran dolmasın
+    misafir.sonTepki = Date.now();
+    tepkiGoster(misafir.no, m.emoji);
     return;
   }
   if (m?.tip === 'eylem' && misafir.no !== null && EYLEMLER.has(m.ad) && Array.isArray(m.args)) {
@@ -645,7 +681,7 @@ $('surumNotu').textContent = `sürüm ${SURUM}`;
 $('yenidenBaglanBtn').addEventListener('click', yenidenBaglan);
 sonOdayiGoster();
 
-$('odaAcBtn').addEventListener('click', odaAc);
+$('odaAcBtn').addEventListener('click', () => odaAc());
 $('katilBtn').addEventListener('click', odayaKatil);
 $('odaKodu').addEventListener('keydown', e => {
   if (e.key === 'Enter') odayaKatil();
