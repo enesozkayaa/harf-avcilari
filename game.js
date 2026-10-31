@@ -1903,7 +1903,11 @@ function kartEtkisi(kart, saldiran, hedef) {
 function ciz() {
   const oklar = oyun.faz === 'yolSecimi' ? oyun.yolSecenekleri : [];
   if (UC_BOYUT) {
-    Tahta3D.piyonlariGuncelle(oyun.oyuncular, oyun.sira, oyun.ziplayan, ADIM_SURESI);
+    // 🧊 Kendi turunu oynayan oyuncu (Ayna'dan Dondur yansıdıysa) buzun içinde yürümesin:
+    // buz, turu bitince piyonu sarar, sonraki turunda bekleyip kırılır
+    const gorunen = oyun.oyuncular.map((o, i) => (o.donmus && i === oyun.sira && oyun.faz !== 'donmus'
+      ? { ...o, donmus: false } : o));
+    Tahta3D.piyonlariGuncelle(gorunen, oyun.sira, oyun.ziplayan, ADIM_SURESI);
     Tahta3D.yolOklari(aktif().konum, oklar);
     Tahta3D.hedefleriIsaretle(oyun.hedefler);
     Tahta3D.nesneleriGuncelle(Object.fromEntries(Object.entries(oyun.nesneler)
