@@ -853,3 +853,11 @@ button.kartYuz:hover:not(:disabled) { transform: translateY(-4px) rotate(-1.5deg
 
 /* Kapalı müzik düğmesi soluk görünür */
 .ustBar button.kapali { opacity: .4; }
+
+/* Online: ad kutusu, eksikse kırmızı parlar; bekleme odası listesi */
+.onlineAd { width: 100%; font-size: 16px; }
+.eksik { outline: 3px solid #e74c3c; animation: titre .35s; }
+@keyframes titre { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+.lobiListesi { list-style: none; padding: 0; margin: 6px 0 0; display: flex; flex-direction: column; gap: 4px; }
+.lobiListesi li { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.lobiListesi .nokta { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }

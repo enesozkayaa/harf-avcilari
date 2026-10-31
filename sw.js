@@ -5,14 +5,14 @@
 // internet yoksa kaydedilmiş kopya açılır. Online oynamak için yine internet gerekir.
 // =============================================================
 
-const ONBELLEK = 'harf-avcilari-v3';
+const ONBELLEK = 'harf-avcilari-v4';
 const DOSYALAR = [
   './', 'index.html', 'style.css', 'game.js', 'gorsel.js', 'tahta3d.js', 'ses.js', 'ag.js', 'kelimeler.js',
   'manifest.webmanifest', 'ikonlar/ikon-192.png', 'ikonlar/ikon-512.png',
 ];
 
 self.addEventListener('install', olay => {
-  olay.waitUntil(caches.open(ONBELLEK).then(onbellek => onbellek.addAll(DOSYALAR)));
+  olay.waitUntil(caches.open(ONBELLEK).then(onbellek => onbellek.addAll(DOSYALAR.map(d => new Request(d, { cache: 'reload' })))));
   self.skipWaiting();
 });
 
@@ -23,11 +23,14 @@ self.addEventListener('activate', olay => {
   self.clients.claim();
 });
 
-// Önce internetten dene (en yeni sürüm), olmazsa kaydedilmiş kopyayı ver
+// Önce internetten dene (en yeni sürüm), olmazsa kaydedilmiş kopyayı ver.
+// Oyunun kendi dosyaları tarayıcının kısa süreli önbelleği atlanarak sunucuya sorulur;
+// yoksa güncellemeden sonraki ~10 dakika eski dosya gelebiliyor (eski sürümle online oyun bozulur).
 self.addEventListener('fetch', olay => {
   if (olay.request.method !== 'GET') return;
+  const ayniSite = new URL(olay.request.url).origin === self.location.origin;
   olay.respondWith(
-    fetch(olay.request)
+    (ayniSite ? fetch(olay.request.url, { cache: 'no-cache' }) : fetch(olay.request))
       .then(cevap => {
         if (cevap.ok) {
           const kopya = cevap.clone();

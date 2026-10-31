@@ -9,11 +9,14 @@
 //                    çizer, gelen olayları (ses, zar, yükselen yazılar) aynen oynatır.
 //
 // Mesajlar:
-//   misafir → ev: { tip: 'katil', ad, renk }  { tip: 'eylem', ad, args }
-//   ev → misafir: { tip: 'kabul', no }  { tip: 'lobi', isimler }  { tip: 'basla', tahta }
+//   misafir → ev: { tip: 'katil', ad, renk, surum }  { tip: 'eylem', ad, args }
+//   ev → misafir: { tip: 'kabul', no, surum }  { tip: 'lobi', oyuncular }  { tip: 'red', neden }  { tip: 'basla', tahta }
 //                 { tip: 'durum', ... }  { tip: 'olay', ad, args }
 // =============================================================
 
+// Online oyunun sürümü: ev ve misafirlerde aynı olmalı. Online kısmı her değiştiğinde 1 artır;
+// eski sürümle (önbellekte kalmış dosyalarla) gelen oyuncu odaya alınmaz, güncellemesi istenir.
+const SURUM = 4;
 const ODA_ONEKI = 'harf-avcilari-oda-';
 const KOD_HARFLERI = 'ABCDEFGHJKLMNPRSTUVYZ23456789';  // karışabilecek O/0, I/1 yok
 const ODA_KODU_UZUNLUK = 5;
@@ -23,6 +26,7 @@ const ag = {
   baglanti: null,     // misafirde: eve olan bağlantı
   misafirler: [],     // evde: { baglanti, no, ad, renk, sonMesaj }
   basladi: false,     // evde: oyun başladıysa yeni gelen alınmaz
+  uyari: '',          // evde: bekleme odasında gösterilecek uyarı (eski sürümle gelen oldu vb.)
   gonderimBekliyor: false,
   tahtaKuruldu: false,
   sonMesaj: 0,
@@ -171,8 +175,25 @@ function odaKoduUret() {
   return [...Array(ODA_KODU_UZUNLUK)].map(() => KOD_HARFLERI[rastgele(0, KOD_HARFLERI.length - 1)]).join('');
 }
 
+// Online'da herkesin adı olmalı (kim kim belli olsun). Yoksa ad kutusu kırmızı parlar.
+function onlineAdi() {
+  const kutu = $('onlineAd');
+  const ad = kutu.value.trim();
+  if (!ad) {
+    kutu.classList.remove('eksik');
+    void kutu.offsetWidth;
+    kutu.classList.add('eksik');
+    kutu.focus();
+    onlineDurum('✏️ Önce adını yaz, sonra tekrar bas.');
+    return null;
+  }
+  kutu.classList.remove('eksik');
+  $('isimAlanlari').querySelector('input').value = ad;
+  return ad;
+}
+
 function odaAc() {
-  if (!peerVarMi()) return;
+  if (!onlineAdi() || !peerVarMi()) return;
   const kod = odaKoduUret();
   onlineDurum('⏳ Oda açılıyor...');
   ag.peer = new Peer(ODA_ONEKI + kod);
@@ -188,10 +209,7 @@ function odaAc() {
   ag.peer.on('connection', baglanti => {
     // Oyun başladıysa ya da oda dolduysa yeni gelen giremez
     if (ag.basladi || ag.misafirler.length >= EN_FAZLA_OYUNCU - 1) {
-      baglanti.on('open', () => {
-        baglanti.send({ tip: 'red', neden: ag.basladi ? 'Oyun başlamış.' : `Oda dolu (${EN_FAZLA_OYUNCU} kişi).` });
-        setTimeout(() => baglanti.close(), 500);
-      });
+      baglanti.on('open', () => reddet(baglanti, ag.basladi ? 'Oyun başlamış.' : `Oda dolu (${EN_FAZLA_OYUNCU} kişi).`));
       return;
     }
     const misafir = { baglanti, no: null, ad: '', renk: null, sonMesaj: Date.now() };
@@ -206,6 +224,11 @@ function odaAc() {
     if (e.type === 'unavailable-id') odaAc();  // aynı kod kullanılıyormuş, yenisini dene
     else if (AG.mod !== 'ev') onlineDurum(`❌ Oda açılamadı (${e.type}). İnternet bağlantını kontrol et.`);
   });
+}
+
+function reddet(baglanti, neden) {
+  baglanti.send({ tip: 'red', neden });
+  setTimeout(() => baglanti.close(), 500);
 }
 
 // Bekleme odası: ev sahibi + katılanlar isim kutularında görünür (misafirlerinkiler değiştirilemez)
@@ -232,10 +255,10 @@ function lobiyiCiz() {
   });
   $('baslaBtn').disabled = !ag.misafirler.length;
   const kisi = ag.misafirler.length + 1;
-  onlineDurum(`Oda kodun: <b class="odaKodu">${ag.kod}</b><br>`
+  onlineDurum(ag.uyari + `Oda kodun: <b class="odaKodu">${ag.kod}</b><br>`
     + `Bu kodu arkadaşlarına söyle, "Katıl" kısmına yazsınlar. 👥 <b>${kisi}/${EN_FAZLA_OYUNCU}</b> kişi`
     + (ag.misafirler.length ? '<br>Herkes geldiyse ayarları seçip "Oyunu Başlat"a bas.' : '<br>⏳ Bekleniyor...'));
-  gonder({ tip: 'lobi', isimler: isimler.map(a => a || 'Oda sahibi') });
+  gonder({ tip: 'lobi', oyuncular: isimler.map((ad, i) => ({ ad: ad || 'Oda sahibi', renk: renkler[i] })) });
 }
 
 function evMesaji(misafir, m) {
@@ -244,12 +267,21 @@ function evMesaji(misafir, m) {
       misafir.baglanti.close();
       return;
     }
+    // Eski sürümle gelen oyuncu oyunu bozar (kendini yanlış oyuncu sanır): güncellemesi istenir
+    if (m.surum !== SURUM) {
+      const ad = guvenli(String(m.ad ?? '').slice(0, 12) || 'Biri');
+      reddet(misafir.baglanti, 'Uygulaman eski sürümde kalmış. Uygulamayı tamamen kapatıp yeniden aç (tarayıcıdaysan sayfayı yenile), sonra tekrar katıl.');
+      ag.uyari = `⚠️ <b>${ad}</b> eski sürümle bağlanmaya çalıştı: uygulamayı kapatıp yeniden açsın, sonra tekrar katılsın.<br>`;
+      lobiyiCiz();
+      return;
+    }
     misafir.ad = String(m.ad ?? '').slice(0, 12) || `Oyuncu ${ag.misafirler.length + 2}`;
     // İstediği renk alınmışsa boştaki ilk renk verilir
     const alinan = [kurulumRenkleri[0], ...ag.misafirler.map(x => x.renk)];
     misafir.renk = RENKLER.includes(m.renk) && !alinan.includes(m.renk)
       ? m.renk : RENKLER.find(r => !alinan.includes(r));
     ag.misafirler.push(misafir);
+    ag.uyari = '';
     numaralariDagit();
     lobiyiCiz();
     onlineDurum(`✅ <b>${guvenli(misafir.ad)}</b> odaya katıldı!<br>` + $('onlineDurum').innerHTML);
@@ -265,7 +297,7 @@ function evMesaji(misafir, m) {
 function numaralariDagit() {
   ag.misafirler.forEach((m, i) => {
     m.no = i + 1;
-    if (m.baglanti.open) m.baglanti.send({ tip: 'kabul', no: m.no });
+    if (m.baglanti.open) m.baglanti.send({ tip: 'kabul', no: m.no, surum: SURUM });
   });
 }
 
@@ -314,7 +346,7 @@ function ayrilaninSirasiniGec(no) {
 
 // ---------- Misafir: odaya katılma ----------
 function odayaKatil() {
-  if (!peerVarMi()) return;
+  if (!onlineAdi() || !peerVarMi()) return;
   const kod = $('odaKodu').value.trim().toUpperCase();
   if (kod.length !== ODA_KODU_UZUNLUK) {
     onlineDurum(`Oda kodu ${ODA_KODU_UZUNLUK} karakter olmalı.`);
@@ -327,8 +359,7 @@ function odayaKatil() {
     baglanti.on('open', () => {
       ag.baglanti = baglanti;
       AG.mod = 'misafir';
-      const ad = $('isimAlanlari').querySelector('input').value.trim();
-      gonder({ tip: 'katil', ad, renk: kurulumRenkleri[0] });
+      gonder({ tip: 'katil', ad: $('onlineAd').value.trim(), renk: kurulumRenkleri[0], surum: SURUM });
       nabziBaslat();
     });
     baglanti.on('data', m => {
@@ -347,18 +378,30 @@ function odayaKatil() {
 
 function misafirMesaji(m) {
   if (m?.tip === 'kabul' && Number.isInteger(m.no)) {
+    if (m.surum !== SURUM) {
+      ag.baglanti.close();
+      ag.baglanti = null;
+      AG.mod = 'yerel';
+      onlineDurum('❌ Oda sahibinin uygulaması farklı sürümde. İkiniz de uygulamayı kapatıp yeniden açın, sonra tekrar deneyin.');
+      return;
+    }
     const ilkKez = AG.benimNo === 0;
     AG.benimNo = m.no;
     if (ilkKez) {
-      $('baslaBtn').disabled = true;
+      // Oyunun ayarlarını oda sahibi yapar; misafir sadece bekleme listesini görür
+      $('kurulumAyarlari').classList.add('gizli');
       onlineKilitle();
       sesCal('bonus');
     }
-  } else if (m?.tip === 'lobi' && Array.isArray(m.isimler)) {
+  } else if (m?.tip === 'lobi' && Array.isArray(m.oyuncular)) {
     onlineDurum(`✅ Odaya bağlandın! Oyunu oda sahibi başlatacak, bekle...<br>`
-      + `👥 Odada (${m.isimler.length}/${EN_FAZLA_OYUNCU}): ${m.isimler.map(a => guvenli(String(a))).join(', ')}`);
+      + `👥 Odada ${m.oyuncular.length}/${EN_FAZLA_OYUNCU} kişi:`
+      + `<ol class="lobiListesi">${m.oyuncular.map((o, i) => `<li><span class="nokta" style="background:${guvenli(String(o.renk))}"></span>`
+        + `${i + 1}. ${guvenli(String(o.ad))}${i === 0 ? ' <small class="soluk">(oda sahibi)</small>' : ''}`
+        + `${i === AG.benimNo ? ' <b>(sen)</b>' : ''}</li>`).join('')}</ol>`);
   } else if (m?.tip === 'red') {
     ag.baglanti = null;
+    AG.mod = 'yerel';
     onlineDurum(`❌ Odaya girilemedi: ${guvenli(String(m.neden ?? ''))}`);
   } else if (m?.tip === 'basla' && TAHTALAR[m.tahta]) {
     oyun.tahta = tahtaKur(TAHTALAR[m.tahta]);
@@ -448,6 +491,17 @@ function baglantiKoptu() {
   $('baglantiKoptu').classList.remove('gizli');
   sesCal('ceza');
 }
+
+// Online ad kutusu ile 1. oyuncunun isim kutusu aynı şeyi gösterir
+$('onlineAd').value = $('isimAlanlari').querySelector('input')?.value ?? '';
+$('onlineAd').addEventListener('input', () => {
+  $('onlineAd').classList.remove('eksik');
+  $('isimAlanlari').querySelector('input').value = $('onlineAd').value;
+});
+$('isimAlanlari').addEventListener('input', e => {
+  if (e.target === $('isimAlanlari').querySelector('input')) $('onlineAd').value = e.target.value;
+});
+$('surumNotu').textContent = `sürüm ${SURUM}`;
 
 $('odaAcBtn').addEventListener('click', odaAc);
 $('katilBtn').addEventListener('click', odayaKatil);

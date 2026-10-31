@@ -26,7 +26,8 @@
     <fieldset class="onlineKutu">
       <legend>🌐 Online oyna (2–6 kişi)</legend>
       <p class="soluk kucuk">Arkadaşların kendi telefonlarından (Android ya da iPhone) veya bilgisayardan
-        oda koduyla katılır. Önce aşağıya kendi adını yaz ve rengini seç.</p>
+        oda koduyla katılır. Herkes önce kendi adını yazsın, rengini aşağıdaki 1. satırdan seçsin.</p>
+      <input id="onlineAd" class="onlineAd" maxlength="12" placeholder="✏️ Adın (zorunlu)" autocomplete="off">
       <div class="butonlar">
         <button id="odaAcBtn" class="ana">🏠 Oda Aç</button>
       </div>
@@ -36,6 +37,8 @@
       </div>
       <p id="onlineDurum" class="kucuk"></p>
     </fieldset>
+    <!-- Odaya katılan misafirde bu ayarlar gizlenir: oyunu oda sahibi ayarlar -->
+    <div id="kurulumAyarlari">
     <label>Oyuncu sayısı
       <select id="oyuncuSayisi">
         <option>2</option>
@@ -70,9 +73,10 @@
     <!-- Kutucuklar game.js'te KARTLAR listesinden oluşturulur -->
     <fieldset id="kartSecimi" class="kartSecimi"></fieldset>
     <button id="baslaBtn" class="ana">Oyunu Başlat</button>
+    </div>
     <p class="soluk kucuk kaynakNotu">Kelime listesi: TDK sözlüğünden derlenen
       <a href="https://github.com/bilalozdemir/tr-word-list" target="_blank" rel="noopener">tr-word-list</a>
-      (CC BY-SA 4.0)</p>
+      (CC BY-SA 4.0) · <span id="surumNotu"></span></p>
   </section>
 
   <!-- 2) OYUN EKRANI: tahta (ortasında zar) + yan panel -->
@@ -228,7 +232,14 @@
   <script src="ag.js"></script>
   <script>
     // Servis çalışanı: sadece internetten (https) açılınca çalışır, dosyaya çift tıklayınca değil
-    if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js');
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      // Yeni sürüm yüklenince sayfa bir kez kendini yeniler (sadece ana menüdeyken, oyun bozulmasın)
+      const eskiKontrol = navigator.serviceWorker.controller;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (eskiKontrol && AG.mod === 'yerel' && !$('kurulum').classList.contains('gizli')) location.reload();
+      });
+      navigator.serviceWorker.register('sw.js');
+    }
   </script>
 </body>
 </html>
