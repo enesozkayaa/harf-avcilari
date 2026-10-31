@@ -874,3 +874,11 @@ button.kartYuz:hover:not(:disabled) { transform: translateY(-4px) rotate(-1.5deg
   padding: 6px 12px;
 }
 .ipucu3d { right: 130px; }
+
+/* Kartın altındaki görünür uyarı (Elin dolu, Mürekkep yetmiyor...) */
+.kartUyari { font-size: 10.5px; color: #ffd166; font-weight: 700; line-height: 1.2; margin-top: 2px; }
+.kartYuz:disabled .kartUyari { color: #ff8a7a; }
+
+/* Oda kodu üst barda; son odaya dönüş düğmesi */
+#odaBilgisi { color: var(--vurgu); letter-spacing: 1px; }
+#sonOdaBtn { width: 100%; }

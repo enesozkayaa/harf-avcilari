@@ -28,6 +28,8 @@
       <p class="soluk kucuk">Arkadaşların kendi telefonlarından (Android ya da iPhone) veya bilgisayardan
         oda koduyla katılır. Herkes önce kendi adını yazsın, rengini aşağıdaki 1. satırdan seçsin.</p>
       <input id="onlineAd" class="onlineAd" maxlength="12" placeholder="✏️ Adın (zorunlu)" autocomplete="off">
+      <!-- Son girdiğin oda hatırlanır: bağlantın koptuysa tek tuşla geri dönersin -->
+      <button id="sonOdaBtn" class="ana gizli"></button>
       <div class="butonlar">
         <button id="odaAcBtn" class="ana">🏠 Oda Aç</button>
       </div>
@@ -87,6 +89,8 @@
       <span id="turBilgisi"></span>
       <span id="siraBilgisi"></span>
       <span id="hedefBilgisi"></span>
+      <!-- Online'da oda kodu hep görünür: kopan arkadaş bu kodla geri girer -->
+      <span id="odaBilgisi" class="gizli"></span>
       <span>
         <button id="rehberUstBtn" title="Nasıl oynanır? Kartlar ve kareler">❓</button>
         <button id="muzikBtn">🎵</button>
@@ -193,9 +197,10 @@
   <div id="baglantiKoptu" class="perde gizli">
     <div class="pencere">
       <h3>📡 Bağlantı koptu</h3>
-      <p>Arkadaşınla bağlantı kesildi. Oyunu sürdürmek için ana menüye dönüp yeni bir oda açın.</p>
+      <p id="kopmaMetni">Oda sahibiyle bağlantın kesildi. İnternetin geldiyse yeniden bağlanıp kaldığın yerden devam edebilirsin.</p>
       <div class="butonlar">
-        <button class="ana" onclick="location.reload()">🏠 Ana menüye dön</button>
+        <button id="yenidenBaglanBtn" class="ana">🔄 Yeniden bağlan</button>
+        <button onclick="location.reload()">🏠 Ana menüye dön</button>
       </div>
     </div>
   </div>

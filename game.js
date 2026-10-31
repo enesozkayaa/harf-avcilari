@@ -333,6 +333,7 @@ const FINAL_SURE = 60;     // kelime turunda kelime kurmak için saniye
 const ADIM_SURESI = 350;   // piyonun bir kare zıplama süresi (milisaniye)
 const ZAR_SURESI = 950;    // zarın dönme süresi (style.css'teki .zarKup ile aynı tut)
 const CARK_SURESI = 1800;  // ☠️ zehirli zar çarkının dönme süresi
+const ZEHIRDE_KULLANILMAZ = ['zarArti3', 'ciftZar', 'tekrarAt'];  // ☠️ zehirliyken zar kartları işe yaramaz
 // Piyon renkleri: kurulumda her oyuncu birini seçer, seçilen renk başkasına kapanır
 const RENKLER = [
   '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c',
@@ -917,7 +918,8 @@ async function zarAt() {
     deger = Math.max(enAz, deger - o.zarCezasi);
     adimlar.push({ etiket: `🎲 −${o.zarCezasi}`, deger });
   }
-  if (o.zarBonusu) {
+  // ☠️ Zehirli çarkta zar bonusu işlemez: sonuç 3'ü geçemez
+  if (o.zarBonusu && !zehirli) {
     deger += o.zarBonusu;
     adimlar.push({ etiket: `⏫ +${o.zarBonusu}`, deger });
   }
@@ -1100,10 +1102,48 @@ function marketteAlinabilir(o, kart) {
 }
 
 function marketAl(secenekNo) {
-  if (oyun.faz !== 'market') return;
+  if (oyun.faz !== 'market' || oyun.market.degisim != null) return;
   const o = aktif();
   const kart = oyun.market.secenekler[secenekNo];
-  if (!marketteAlinabilir(o, kart)) return;
+  if (!kart || o.murekkep < marketFiyati(o, kart)) return;
+  // Eli doluysa satın almadan önce elinden bir kart bırakması istenir
+  if (!marketteAlinabilir(o, kart)) {
+    oyun.market.degisim = secenekNo;
+    oyun.mesaj = `✋ ${isim(o)}, elin dolu. Bırakacağın kartı seç.`;
+    ciz();
+    return;
+  }
+  marketteSatinAl(o, kart);
+}
+
+// Eli dolu oyuncu marketten alacağı kart için elinden birini bırakır
+function marketBirak(kartNo) {
+  if (oyun.faz !== 'market' || oyun.market.degisim == null) return;
+  const o = aktif();
+  const kart = oyun.market.secenekler[oyun.market.degisim];
+  const birakilan = o.kartlar[kartNo];
+  if (!birakilan) return;
+  o.kartlar.splice(kartNo, 1);
+  oyun.market.degisim = null;
+  // İndirim kartını bırakırsa fiyat artar; parası yetmezse kart geri gelir
+  if (!marketteAlinabilir(o, kart)) {
+    o.kartlar.splice(kartNo, 0, birakilan);
+    oyun.mesaj = `🖋️ ${isim(o)}, o kartı bırakınca mürekkebin yetmiyor.`;
+    ciz();
+    return;
+  }
+  kayit(`🗑️ ${isim(o)} yer açmak için <b>${KARTLAR[birakilan].ad}</b> kartını bıraktı`);
+  marketteSatinAl(o, kart);
+}
+
+function marketDegisimIptal() {
+  if (oyun.faz !== 'market') return;
+  oyun.market.degisim = null;
+  oyun.mesaj = `🏪 ${isim(aktif())}, markete uğradın! İstersen bir kart al.`;
+  ciz();
+}
+
+function marketteSatinAl(o, kart) {
   const fiyat = marketFiyati(o, kart);
   if (fiyat < FIYATLAR[kart]) {
     o.kartlar.splice(o.kartlar.indexOf('indirim'), 1);
@@ -1235,7 +1275,19 @@ function kareEtkisi() {
       saldiriBaslat();
       return;  // sıra, oyuncu kartını kullanınca veya vazgeçince geçer
     }
-    kayit(`⚔️ ${isim(o)} kart kullan karesine geldi ama elinde kullanacak kart yok`);
+    // Rakibe oynanacak kartı yoksa kare boşa gitmesin: bir kart çeker, eli doluysa 1 harf alır
+    if (Object.keys(oyun.kartAgirlik).length && o.kartlar.length < MAX_KART) {
+      const k = agirlikliSec(oyun.kartAgirlik);
+      o.kartlar.push(k);
+      kayit(`⚔️ ${isim(o)} kullanacak saldırı kartı olmadığı için kart çekti: ${KARTLAR[k].ikon} <b>${KARTLAR[k].ad}</b>`);
+      efekt(yer, `${KARTLAR[k].ikon} ${KARTLAR[k].ad}`, 'kart');
+      sesCal('kartCek');
+    } else {
+      const h = harfVer(o);
+      kayit(`⚔️ ${isim(o)} kullanacak saldırı kartı yoktu, yerine <b>${h}</b> harfini aldı`);
+      efekt(yer, `+${h}`, 'harf');
+      sesCal('harf');
+    }
   } else if (tip === 'ceza') {
     sesCal('ceza');
     if (o.harfler.length) {
@@ -1392,6 +1444,13 @@ function onZarKartiSec(kartNo) {
   const kart = o.kartlar[kartNo];
   if (oyun.faz !== 'zar' || oyun.onKartKullanildi || !kart || KARTLAR[kart].pasif) return;
   const bilgi = KARTLAR[kart];
+
+  // ☠️ Zehirliyken zarı güçlendiren kartlar işe yaramaz (çark 0-3'ü geçemez); kart elde kalır
+  if (o.hileliZar && ZEHIRDE_KULLANILMAZ.includes(kart)) {
+    oyun.mesaj = `☠️ ${isim(o)}, zehirliyken ${bilgi.ikon} ${bilgi.ad} kullanılamaz. Kartın elinde kalıyor.`;
+    ciz();
+    return;
+  }
 
   // Önce bir seçim isteyen kartlar: kart, seçim yapılınca harcanır
   if (kart === 'istenenHarf') {
@@ -1962,13 +2021,22 @@ function saldiriPaneliniCiz() {
     return;
   }
   if (oyun.faz === 'market') {
+    // Eli dolu oyuncu bir kart seçtiyse: önce elinden hangi kartı bırakacağı sorulur
+    if (oyun.market.degisim !== null && oyun.market.degisim !== undefined) {
+      const alinacak = KARTLAR[oyun.market.secenekler[oyun.market.degisim]];
+      panel.innerHTML = `<p class="adim">✋ Elin dolu! ${alinacak.ikon} ${alinacak.ad} almak için hangi kartını bırakacaksın?</p>`
+        + `<div class="kartSirasi">${o.kartlar.map((k, kNo) => kartYuzu(k, { tikla: `eylem('marketBirak', ${kNo})`, uyari: '🗑️ Bunu bırak' })).join('')}</div>`
+        + `<button onclick="eylem('marketDegisimIptal')">← Geri</button>`;
+      return;
+    }
     const indirimli = o.kartlar.includes('indirim');
     panel.innerHTML = `<p class="adim">🏪 Market · 🖋️ ${o.murekkep} mürekkebin var${indirimli ? ' · 🏷️ indirim: fiyatlar yarıya!' : ''}</p>`
       + `<div class="kartSirasi">${oyun.market.secenekler.map((k, i) => {
         const fiyat = marketFiyati(o, k);
-        const alinabilir = marketteAlinabilir(o, k);
-        const neden = alinabilir ? KARTLAR[k].aciklama : o.murekkep < fiyat ? 'Mürekkebin yetmiyor' : `Elinde zaten ${MAX_KART} kart var`;
-        return kartYuzu(k, { tikla: `eylem('marketAl', ${i})`, fiyat, kapali: !alinabilir, ipucu: neden });
+        const parasiYeter = o.murekkep >= fiyat;
+        const elDolu = parasiYeter && !marketteAlinabilir(o, k);
+        const uyari = !parasiYeter ? '🖋️ Mürekkep yetmiyor' : elDolu ? '✋ Elin dolu: bir kartını bırakıp alırsın' : '';
+        return kartYuzu(k, { tikla: `eylem('marketAl', ${i})`, fiyat, kapali: !parasiYeter, uyari });
       }).join('')}</div>`
       + `<button onclick="eylem('marketKapat')">Almıyorum →</button>`;
     return;
@@ -1981,9 +2049,13 @@ function saldiriPaneliniCiz() {
 
   // Genişletilmiş tahta: zar atmadan önce elindeki kartlar (istersen kullan, istersen direkt zar at)
   if (onZarSecimi) {
+    // ☠️ Zehirliyken zar kartları soluk görünür ve basılamaz
     panel.innerHTML = '<p class="adim">🃏 Zar atmadan önce bir kart oynayabilirsin — istemezsen direkt zar at:</p>'
-      + `<div class="kartSirasi">${o.kartlar.map((k, kNo) => (KARTLAR[k].pasif ? ''
-        : kartYuzu(k, { tikla: `eylem('onZarKartiSec', ${kNo})` }))).join('')}</div>`;
+      + `<div class="kartSirasi">${o.kartlar.map((k, kNo) => {
+        if (KARTLAR[k].pasif) return '';
+        const zehirde = o.hileliZar && ZEHIRDE_KULLANILMAZ.includes(k);
+        return kartYuzu(k, { tikla: `eylem('onZarKartiSec', ${kNo})`, kapali: zehirde, uyari: zehirde ? '☠️ Zehirliyken olmaz' : '' });
+      }).join('')}</div>`;
     return;
   }
 

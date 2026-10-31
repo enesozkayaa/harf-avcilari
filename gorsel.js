@@ -65,7 +65,8 @@ const KART_PIYON_EFEKTI = {
 
 // Bir kartın yüzü. tikla verilirse buton olur (oynamak/almak için), verilmezse
 // dokununca büyük açıklaması açılır. mini: yan paneldeki küçük hali.
-function kartYuzu(k, { tikla = '', fiyat = null, kapali = false, ipucu = '', mini = false, yeni = false } = {}) {
+// uyari: kartın altında görünen kısa not (Elin dolu, Mürekkep yetmiyor...) — telefonda üstüne gelinemediği için
+function kartYuzu(k, { tikla = '', fiyat = null, kapali = false, ipucu = '', mini = false, yeni = false, uyari = '' } = {}) {
   const b = KARTLAR[k];
   const etiket = tikla ? 'button' : 'div';
   const tiklama = tikla || `kartDetay('${k}')`;
@@ -75,6 +76,7 @@ function kartYuzu(k, { tikla = '', fiyat = null, kapali = false, ipucu = '', min
     + (mini ? '' : `<small class="kartKisa">${kartKisa(k)}</small>`)
     + (b.pasif && !mini ? '<small class="kartPasif">elde durur, kendiliğinden çalışır</small>' : '')
     + (fiyat !== null ? `<span class="fiyat">${fiyat} 🖋️</span>` : '')
+    + (uyari ? `<small class="kartUyari">${uyari}</small>` : '')
     + `</${etiket}>`;
 }
 
@@ -297,7 +299,7 @@ const KARE_ACIKLAMA = {
   bonus:     'Durursan 2 harf alırsın.',
   hazine:    'Durursan 3 harf alırsın!',
   kart:      `Durursan bir kart çekersin (elinde en fazla ${MAX_KART} kart olur).`,
-  saldir:    'Durursan elindeki bir kartı rakibine kullanabilirsin.',
+  saldir:    'Durursan elindeki bir saldırı kartını rakibine kullanabilirsin. Saldırı kartın yoksa bir kart çekersin (elin doluysa 1 harf alırsın).',
   ceza:      'Durursan rastgele 1 harfini kaybedersin.',
   kartKaybi: 'Durursan rastgele 1 kartını kaybedersin.',
   market:    'Üstünden geçerken bile uğrarsın: 3 karttan birini mürekkeple satın alabilirsin.',

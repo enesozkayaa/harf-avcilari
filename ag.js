@@ -16,7 +16,7 @@
 
 // Online oyunun sürümü: ev ve misafirlerde aynı olmalı. Online kısmı her değiştiğinde 1 artır;
 // eski sürümle (önbellekte kalmış dosyalarla) gelen oyuncu odaya alınmaz, güncellemesi istenir.
-const SURUM = 4;
+const SURUM = 5;
 const ODA_ONEKI = 'harf-avcilari-oda-';
 const KOD_HARFLERI = 'ABCDEFGHJKLMNPRSTUVYZ23456789';  // karışabilecek O/0, I/1 yok
 const ODA_KODU_UZUNLUK = 5;
@@ -42,7 +42,7 @@ const EYLEMLER = new Set([
   'zarAt', 'yolSec', 'onZarKartiSec', 'saldiriKartSec', 'saldiriHedefSec', 'saldiriVazgec',
   'secimIptal', 'ozelHarfAl', 'degnekSec', 'kareTiklandi', 'casusAt', 'marketAl', 'marketKapat',
   'tekrarCevapla', 'harfSec', 'harfSil', 'pasGec', 'kelimeyiGonder', 'oyla', 'jokerHarfiSec',
-  'jokerIptal', 'taslariKaristir', 'tahtayaDevam',
+  'jokerIptal', 'taslariKaristir', 'tahtayaDevam', 'marketBirak', 'marketDegisimIptal',
 ]);
 const KELIME_EYLEMLERI = new Set([
   'harfSec', 'harfSil', 'pasGec', 'kelimeyiGonder', 'jokerHarfiSec', 'jokerIptal', 'taslariKaristir',
@@ -149,7 +149,8 @@ function durumGonder() {
 agOyunBasladi = function () {
   if (AG.mod !== 'ev') return;
   ag.basladi = true;
-  gonder({ tip: 'basla', tahta: $('tahtaSecimi').value });
+  ag.tahtaTipi = $('tahtaSecimi').value;
+  gonder({ tip: 'basla', tahta: ag.tahtaTipi });
 };
 
 // Olay fonksiyonlarını sar: evde çağrılınca misafirlere de gönderilsin
@@ -198,18 +199,21 @@ function odaAc() {
   onlineDurum('⏳ Oda açılıyor...');
   ag.peer = new Peer(ODA_ONEKI + kod);
   ag.peer.on('open', () => {
+    if (AG.mod === 'ev') return;  // internet gidip gelince tekrar "open" gelir; oda zaten açık
     AG.mod = 'ev';
     AG.benimNo = 0;
     ag.kod = kod;
     $('oyuncuSayisi').disabled = true;
     onlineKilitle();
+    odaKodunuGoster(kod);
     lobiyiCiz();
     nabziBaslat();
   });
+  sunucuyaYenidenBaglan(ag.peer);
   ag.peer.on('connection', baglanti => {
-    // Oyun başladıysa ya da oda dolduysa yeni gelen giremez
-    if (ag.basladi || ag.misafirler.length >= EN_FAZLA_OYUNCU - 1) {
-      baglanti.on('open', () => reddet(baglanti, ag.basladi ? 'Oyun başlamış.' : `Oda dolu (${EN_FAZLA_OYUNCU} kişi).`));
+    // Oyun başlamadan oda dolduysa yeni gelen giremez (oyun başladıysa sadece kopan geri girebilir)
+    if (!ag.basladi && ag.misafirler.length >= EN_FAZLA_OYUNCU - 1) {
+      baglanti.on('open', () => reddet(baglanti, `Oda dolu (${EN_FAZLA_OYUNCU} kişi).`));
       return;
     }
     const misafir = { baglanti, no: null, ad: '', renk: null, sonMesaj: Date.now() };
@@ -263,16 +267,24 @@ function lobiyiCiz() {
 
 function evMesaji(misafir, m) {
   if (m?.tip === 'katil' && misafir.no === null) {
-    if (ag.basladi || ag.misafirler.length >= EN_FAZLA_OYUNCU - 1) {
-      misafir.baglanti.close();
-      return;
-    }
     // Eski sürümle gelen oyuncu oyunu bozar (kendini yanlış oyuncu sanır): güncellemesi istenir
     if (m.surum !== SURUM) {
       const ad = guvenli(String(m.ad ?? '').slice(0, 12) || 'Biri');
       reddet(misafir.baglanti, 'Uygulaman eski sürümde kalmış. Uygulamayı tamamen kapatıp yeniden aç (tarayıcıdaysan sayfayı yenile), sonra tekrar katıl.');
-      ag.uyari = `⚠️ <b>${ad}</b> eski sürümle bağlanmaya çalıştı: uygulamayı kapatıp yeniden açsın, sonra tekrar katılsın.<br>`;
-      lobiyiCiz();
+      if (ag.basladi) {
+        kayit(`⚠️ ${ad} eski sürümle bağlanmaya çalıştı: uygulamayı kapatıp yeniden açsın`);
+      } else {
+        ag.uyari = `⚠️ <b>${ad}</b> eski sürümle bağlanmaya çalıştı: uygulamayı kapatıp yeniden açsın, sonra tekrar katılsın.<br>`;
+        lobiyiCiz();
+      }
+      return;
+    }
+    if (ag.basladi) {
+      oyunaGeriAl(misafir, m);
+      return;
+    }
+    if (ag.misafirler.length >= EN_FAZLA_OYUNCU - 1) {
+      reddet(misafir.baglanti, `Oda dolu (${EN_FAZLA_OYUNCU} kişi).`);
       return;
     }
     misafir.ad = String(m.ad ?? '').slice(0, 12) || `Oyuncu ${ag.misafirler.length + 2}`;
@@ -291,6 +303,34 @@ function evMesaji(misafir, m) {
   if (m?.tip === 'eylem' && misafir.no !== null && EYLEMLER.has(m.ad) && Array.isArray(m.args)) {
     eylemUygula(m.ad, misafir.no, m.args);
   }
+}
+
+// 🔄 Oyun başladıktan sonra gelen: aynı adla oynayan bir oyuncu varsa onun yerine geri girer
+// ve kaldığı yerden devam eder (harfleri, kartları, puanı aynen durur).
+function oyunaGeriAl(misafir, m) {
+  const ad = String(m.ad ?? '').trim().toLocaleLowerCase('tr');
+  const no = oyun.oyuncular.findIndex((o, i) => i > 0 && o.ad.trim().toLocaleLowerCase('tr') === ad);
+  if (no === -1) {
+    reddet(misafir.baglanti, 'Oyun başlamış. Kopan bir oyuncuysan oyundaki adının aynısını yazıp tekrar katıl.');
+    return;
+  }
+  // Eski bağlantısı hâlâ listede görünüyorsa (kopuşu henüz fark edilmediyse) sessizce çıkarılır
+  const eski = ag.misafirler.find(x => x.no === no);
+  if (eski) {
+    ag.misafirler.splice(ag.misafirler.indexOf(eski), 1);
+    eski.baglanti.close();
+  }
+  const o = oyun.oyuncular[no];
+  misafir.no = no;
+  misafir.ad = o.ad;
+  misafir.renk = o.renk;
+  ag.misafirler.push(misafir);
+  o.koptu = false;
+  misafir.baglanti.send({ tip: 'kabul', no, surum: SURUM });
+  misafir.baglanti.send({ tip: 'basla', tahta: ag.tahtaTipi });
+  kayit(`🔄 ${isim(o)} oyuna geri döndü!`);
+  sesCal('bonus');
+  durumGonder();
 }
 
 // Her misafire oyuncu numarasını bildir (biri ayrılınca numaralar kayar)
@@ -315,12 +355,8 @@ function misafirKoptu(misafir) {
   const o = oyun.oyuncular[misafir.no];
   if (!o || o.koptu) return;
   o.koptu = true;
-  kayit(`📡 ${isim(o)} oyundan ayrıldı. Sırası gelince otomatik geçilecek.`);
+  kayit(`📡 ${isim(o)} bağlantısı koptu. Oda kodu <b>${ag.kod}</b> ve aynı adla geri girebilir; o zamana kadar sırası atlanır.`);
   sesCal('ceza');
-  if (!ag.misafirler.length) {
-    $('baglantiKoptu').classList.remove('gizli');
-    return;
-  }
   ayrilaninSirasiniGec(misafir.no);
   durumDegisti();
 }
@@ -345,6 +381,7 @@ function ayrilaninSirasiniGec(no) {
 }
 
 // ---------- Misafir: odaya katılma ----------
+// Misafir: koda bağlanır. Bağlantısı kopan da aynı yolla (aynı kod ve adla) geri girer.
 function odayaKatil() {
   if (!onlineAdi() || !peerVarMi()) return;
   const kod = $('odaKodu').value.trim().toUpperCase();
@@ -352,10 +389,17 @@ function odayaKatil() {
     onlineDurum(`Oda kodu ${ODA_KODU_UZUNLUK} karakter olmalı.`);
     return;
   }
-  onlineDurum('⏳ Odaya bağlanılıyor...');
-  ag.peer = new Peer();
-  ag.peer.on('open', () => {
-    const baglanti = ag.peer.connect(ODA_ONEKI + kod, { reliable: true });
+  ag.kod = kod;
+  katilmaDurumu('⏳ Odaya bağlanılıyor...');
+  try {
+    ag.peer?.destroy();
+  } catch (e) { /* eski bağlantı zaten kapanmış */ }
+  const peer = new Peer();
+  ag.peer = peer;
+  sunucuyaYenidenBaglan(peer);
+  peer.on('open', () => {
+    if (ag.peer !== peer || ag.baglanti) return;
+    const baglanti = peer.connect(ODA_ONEKI + kod, { reliable: true });
     baglanti.on('open', () => {
       ag.baglanti = baglanti;
       AG.mod = 'misafir';
@@ -366,14 +410,40 @@ function odayaKatil() {
       ag.sonMesaj = Date.now();
       if (m?.tip !== 'nabiz') misafirMesaji(m);
     });
-    baglanti.on('close', baglantiKoptu);
-    baglanti.on('error', baglantiKoptu);
+    // Yeniden bağlanınca eski bağlantının kapanması yenisini düşürmesin
+    baglanti.on('close', () => ag.baglanti === baglanti && baglantiKoptu());
+    baglanti.on('error', () => ag.baglanti === baglanti && baglantiKoptu());
   });
-  ag.peer.on('error', e => {
-    onlineDurum(e.type === 'peer-unavailable'
-      ? '❌ Bu kodla bir oda bulunamadı. Kodu kontrol et.'
+  peer.on('error', e => {
+    if (ag.peer !== peer || ag.baglanti) return;
+    katilmaDurumu(e.type === 'peer-unavailable'
+      ? '❌ Bu kodla bir oda bulunamadı. Oda sahibinin oyunu açık mı? Kodu kontrol et.'
       : `❌ Bağlanılamadı (${e.type}). İnternet bağlantını kontrol et.`);
   });
+}
+
+// Bağlanma durumu: ana menüdeyse online kutusuna, oyundayken "bağlantı koptu" penceresine yazılır
+function katilmaDurumu(html) {
+  onlineDurum(html);
+  $('kopmaMetni').innerHTML = html;
+}
+
+// İnternet gidip gelince PeerJS sunucusuyla bağlantı da kopar; birkaç saniyede bir yeniden denenir.
+// (Odayı açanın sunucuya bağlı kalması, kopan arkadaşların geri girebilmesi için şart.)
+function sunucuyaYenidenBaglan(peer) {
+  peer.on('disconnected', () => {
+    setTimeout(() => {
+      if (peer.destroyed || !peer.disconnected) return;
+      try {
+        peer.reconnect();
+      } catch (e) { /* bir sonraki denemede yine denenir */ }
+    }, 2000);
+  });
+}
+
+function odaKodunuGoster(kod) {
+  $('odaBilgisi').innerHTML = `🔑 Oda: <b>${kod}</b>`;
+  $('odaBilgisi').classList.remove('gizli');
 }
 
 function misafirMesaji(m) {
@@ -387,6 +457,12 @@ function misafirMesaji(m) {
     }
     const ilkKez = AG.benimNo === 0;
     AG.benimNo = m.no;
+    odaKodunuGoster(ag.kod);
+    $('baglantiKoptu').classList.add('gizli');
+    // Son oda hatırlanır: uygulama kapanırsa ana menüden tek tuşla geri dönülür
+    try {
+      localStorage.setItem(SON_ODA_ANAHTARI, JSON.stringify({ kod: ag.kod, ad: $('onlineAd').value.trim(), zaman: Date.now() }));
+    } catch (e) { /* hatırlanamazsa kodu elle yazar */ }
     if (ilkKez) {
       // Oyunun ayarlarını oda sahibi yapar; misafir sadece bekleme listesini görür
       $('kurulumAyarlari').classList.add('gizli');
@@ -401,8 +477,8 @@ function misafirMesaji(m) {
         + `${i === AG.benimNo ? ' <b>(sen)</b>' : ''}</li>`).join('')}</ol>`);
   } else if (m?.tip === 'red') {
     ag.baglanti = null;
-    AG.mod = 'yerel';
-    onlineDurum(`❌ Odaya girilemedi: ${guvenli(String(m.neden ?? ''))}`);
+    if (!ag.tahtaKuruldu) AG.mod = 'yerel';
+    katilmaDurumu(`❌ Odaya girilemedi: ${guvenli(String(m.neden ?? ''))}`);
   } else if (m?.tip === 'basla' && TAHTALAR[m.tahta]) {
     oyun.tahta = tahtaKur(TAHTALAR[m.tahta]);
   } else if (m?.tip === 'durum') {
@@ -463,6 +539,7 @@ function onlineDurum(html) {
 // Düzenli nabız: ev herkese atar ve sessiz kalanı düşürür; misafir eve atar ve ev susarsa kopar
 function nabziBaslat() {
   ag.sonMesaj = Date.now();
+  clearInterval(ag.nabiz);
   const zamanlayici = setInterval(() => {
     if (AG.mod === 'ev') {
       gonder({ tip: 'nabiz' });
@@ -482,14 +559,46 @@ function nabziBaslat() {
       baglantiKoptu();
     }
   }, NABIZ_ARALIGI);
+  ag.nabiz = zamanlayici;
 }
 
-// Misafirde: oda sahibiyle bağlantı koptu, oyun sürdürülemez
+// Misafirde: oda sahibiyle bağlantı koptu. "Yeniden bağlan" ile aynı odaya geri girilir.
 function baglantiKoptu() {
   if (!ag.baglanti) return;
   ag.baglanti = null;
+  $('kopmaMetni').textContent = 'Oda sahibiyle bağlantın kesildi. İnternetin geldiyse yeniden bağlanıp kaldığın yerden devam edebilirsin.';
   $('baglantiKoptu').classList.remove('gizli');
   sesCal('ceza');
+}
+
+function yenidenBaglan() {
+  if (ag.baglanti) return;
+  $('odaKodu').value = ag.kod ?? '';
+  odayaKatil();
+}
+
+// ---------- Son oda: uygulama kapanıp açılınca geri dönmek için ----------
+const SON_ODA_ANAHTARI = 'harfAvcilari.sonOda';
+const SON_ODA_SURESI = 6 * 60 * 60 * 1000;  // 6 saatten eski oda hatırlanmaz
+
+function sonOdayiGoster() {
+  let son = null;
+  try {
+    son = JSON.parse(localStorage.getItem(SON_ODA_ANAHTARI));
+  } catch (e) { /* kayıt yoksa düğme çıkmaz */ }
+  if (!son?.kod || Date.now() - son.zaman > SON_ODA_SURESI) return;
+  const dugme = $('sonOdaBtn');
+  dugme.textContent = `🔄 Son odana geri dön (${son.kod})`;
+  dugme.classList.remove('gizli');
+  dugme.addEventListener('click', () => {
+    $('odaKodu').value = son.kod;
+    if (!$('onlineAd').value.trim() && son.ad) {
+      $('onlineAd').value = son.ad;
+      $('isimAlanlari').querySelector('input').value = son.ad;
+    }
+    dugme.classList.add('gizli');
+    odayaKatil();
+  });
 }
 
 // Online ad kutusu ile 1. oyuncunun isim kutusu aynı şeyi gösterir
@@ -502,6 +611,8 @@ $('isimAlanlari').addEventListener('input', e => {
   if (e.target === $('isimAlanlari').querySelector('input')) $('onlineAd').value = e.target.value;
 });
 $('surumNotu').textContent = `sürüm ${SURUM}`;
+$('yenidenBaglanBtn').addEventListener('click', yenidenBaglan);
+sonOdayiGoster();
 
 $('odaAcBtn').addEventListener('click', odaAc);
 $('katilBtn').addEventListener('click', odayaKatil);
