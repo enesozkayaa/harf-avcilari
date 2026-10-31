@@ -883,12 +883,12 @@ const Tahta3D = (() => {
     elleYakinlastirildi = true;
   }
 
-  // Fare: sürükle = döndür, sağ tık (ya da Shift) ile sürükle = kaydır, tekerlek = imlece yakınlaş.
-  // Dokunmatik: tek parmak = döndür, iki parmak = kıstırıp yakınlaş ve birlikte kaydır.
+  // Fare: sürükle = kaydır (harita gibi), sağ tık (ya da Shift) ile sürükle = döndür, tekerlek = imlece yakınlaş.
+  // Dokunmatik: tek parmak = kaydır, iki parmak = kıstırıp yakınlaş, birlikte kaydır, çevirip döndür.
   // Çift tık / çift dokunuş = o noktaya yakınlaş.
   function fareyiBagla(canvas) {
     let surukleniyor = false;
-    let kaydiriliyor = false;
+    let donduruluyor = false;     // sağ tık ya da Shift ile sürükleme: tahtayı döndürür
     let basX = 0;
     let basY = 0;
     let sonX = 0;
@@ -897,10 +897,15 @@ const Tahta3D = (() => {
     const parmaklar = new Map();  // ekrandaki parmaklar: pointerId → {x, y}
     let kistirma = 0;             // iki parmak arasındaki son uzaklık (0: kıstırma yok)
     let ortaNokta = null;         // iki parmağın son orta noktası (kaydırma için)
+    let parmakAcisi = null;       // iki parmak arasındaki çizginin son açısı (döndürme için)
     let kistirildi = false;       // bu dokunuşta kıstırma yapıldıysa bırakınca tıklama sayılmasın
     const parmakAraligi = () => {
       const [a, b] = [...parmaklar.values()];
       return Math.hypot(a.x - b.x, a.y - b.y);
+    };
+    const parmakAcisiniBul = () => {
+      const [a, b] = [...parmaklar.values()];
+      return Math.atan2(b.y - a.y, b.x - a.x);
     };
     const parmakOrtasi = () => {
       const [a, b] = [...parmaklar.values()];
@@ -913,13 +918,14 @@ const Tahta3D = (() => {
       if (parmaklar.size === 2) {
         kistirma = parmakAraligi();
         ortaNokta = parmakOrtasi();
+        parmakAcisi = parmakAcisiniBul();
         kistirildi = true;
         surukleniyor = false;
         return;
       }
       kistirildi = false;
       surukleniyor = true;
-      kaydiriliyor = e.button === 2 || e.shiftKey;
+      donduruluyor = e.button === 2 || e.shiftKey;
       basX = sonX = e.clientX;
       basY = sonY = e.clientY;
       canvas.setPointerCapture(e.pointerId);
@@ -931,8 +937,17 @@ const Tahta3D = (() => {
         const orta = parmakOrtasi();
         if (kistirma && aralik) noktayaYakinlastir(kistirma / aralik, orta.x, orta.y);
         if (ortaNokta) kaydir(ortaNokta.x, ortaNokta.y, orta.x, orta.y);
+        // İki parmağı çevirince tahta da döner
+        const aci = parmakAcisiniBul();
+        if (parmakAcisi !== null) {
+          let fark = aci - parmakAcisi;
+          if (fark > Math.PI) fark -= 2 * Math.PI;
+          if (fark < -Math.PI) fark += 2 * Math.PI;
+          yorunge.aci += fark;
+        }
         kistirma = aralik;
         ortaNokta = orta;
+        parmakAcisi = aci;
         return;
       }
       if (!surukleniyor) {
@@ -946,11 +961,11 @@ const Tahta3D = (() => {
         canvas.style.cursor = oktaMi(e) !== null || uzerindekiKare !== null ? 'pointer' : '';
         return;
       }
-      if (kaydiriliyor) {
-        kaydir(sonX, sonY, e.clientX, e.clientY);
-      } else {
+      if (donduruluyor) {
         yorunge.aci -= (e.clientX - sonX) * 0.008;
         yorunge.egim = Math.min(1.25, Math.max(0.25, yorunge.egim - (e.clientY - sonY) * 0.006));
+      } else {
+        kaydir(sonX, sonY, e.clientX, e.clientY);
       }
       sonX = e.clientX;
       sonY = e.clientY;
@@ -959,13 +974,14 @@ const Tahta3D = (() => {
       parmaklar.delete(e.pointerId);
       kistirma = 0;
       ortaNokta = null;
-      // İki parmaktan biri kalktıysa kalan parmakla döndürmeye zıplamadan devam et
+      parmakAcisi = null;
+      // İki parmaktan biri kalktıysa kalan parmakla kaydırmaya zıplamadan devam et
       if (parmaklar.size === 1) {
         const [p] = parmaklar.values();
         sonX = p.x;
         sonY = p.y;
         surukleniyor = true;
-        kaydiriliyor = false;
+        donduruluyor = false;
       } else {
         surukleniyor = false;
       }

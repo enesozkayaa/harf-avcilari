@@ -675,7 +675,7 @@ function tahtaEkraniniKur() {
     // telefonda tahtayı kapatmasın diye tahtanın altına gelir
     if (MOBIL) {
       $('tahta3d').after($('kontroller'));
-      document.querySelector('.ipucu3d').textContent = '👆 Kaydır: döndür · İki parmak: yakınlaş ve kaydır · Çift dokun: oraya yakınlaş';
+      document.querySelector('.ipucu3d').textContent = '👆 Kaydır: tahtayı kaydır · İki parmak: yakınlaş, çevir: döndür · Çift dokun: oraya yakınlaş';
     } else {
       $('tahta3d').appendChild($('kontroller'));
     }
