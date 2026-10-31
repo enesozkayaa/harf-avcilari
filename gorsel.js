@@ -436,7 +436,7 @@ const REHBER_SAYFALARI = [
         <li>Kelimenin puanı = harflerin puanları toplamı (taşın köşesinde yazar).</li>
         <li><span class="harf joker">★<sub>0</sub></span> Joker istediğin harf olur, 0 puandır.</li>
         <li>Tüm harflerini kullanıp en az ${BITIRME_MIN_HARF} harfli kelime kurarsan <b>+${BITIRME_BONUSU}</b> bonus!</li>
-        <li>Kelime sözlükte yoksa diğer oyuncular geçerli mi diye oylar.</li>
+        <li>Kelime sözlükte yoksa diğerleri 👍/👎 oy verir; online'da son kararı oda kurucusu verir.</li>
         <li>Kullandığın harfler gider, kalanlar seninle tahtaya döner.</li>
       </ul>`,
   },

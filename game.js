@@ -205,7 +205,7 @@ const harfinKendisi = h => (ozelMi(h) ? h.slice(OZEL_ON.length) : h);
 const harfPuani = h => (ozelMi(h) ? OZEL_HARF_PUANI : HARF_PUANI[h]);
 const tasSinifi = h => (h === JOKER ? 'joker' : ozelMi(h) ? 'ozel' : '');
 
-const MIN_KELIME = 3;        // kelime turunda en az kaç harf
+const MIN_KELIME = 2;        // kelime turunda en az kaç harf (2 harfli kelimeler de puan alır)
 const BITIRME_BONUSU = 35;   // elindeki tüm harfleri kullanırsan...
 const BITIRME_MIN_HARF = 6;  // ...ve kelimen en az bu kadar harfliyse
 
@@ -386,6 +386,8 @@ function eylem(ad, ...args) {
 function durumDegisti() {}
 // Oyun başladı: online evde misafire tahtayı kurdurur (ag.js doldurur)
 function agOyunBasladi() {}
+// Sözlükte olmayan kelime için oylama açıldı: online'da oy sayacı başlar (ag.js doldurur)
+function oylamaBasladi() {}
 
 // ---------- 2) OYUN DURUMU ----------
 // Oyunun o anki her bilgisi bu tek nesnede durur.
@@ -2224,16 +2226,19 @@ function finalCiz() {
   durumDegisti();
 }
 
-// Online kelime turunda: kelimeyi kuran kişi taşlara ve butonlara dokunabilir, diğeri izler.
-// Sözlükte bulunamayan kelimeye ise kuran değil RAKİBİ karar verir.
+// Online kelime turunda: kelimeyi kuran kişi taşlara ve butonlara dokunabilir, diğerleri izler.
+// Sözlükte bulunamayan kelimede: oda kurucusu son kararı verir, diğerleri 👍/👎 oy verir (ag.js).
 function finalYetkiAyarla() {
   const kuran = benimSiram();
   ['finalHarfler', 'jokerSecici', 'kelimeKontrolleri', 'sozlukDevamBtn'].forEach(id =>
     $(id).classList.toggle('izleyici', !kuran));
-  // Kelimeyi kuran kendine oy veremez; oyunu veren de ikinci kez veremez
-  const oyVerdi = oyun.oylar?.[AG.benimNo] !== undefined;
-  ['gecerliBtn', 'gecersizBtn'].forEach(id =>
-    $(id).classList.toggle('izleyici', online() && (kuran || oyVerdi)));
+  if (!online()) return;
+  // Kelimeyi kuran kendine oy veremez; oy veren de ikinci kez veremez (oda kurucusu her an karar verebilir)
+  const kurucu = AG.benimNo === 0;
+  const oyVerdi = !kurucu && oyun.oylar?.[AG.benimNo] !== undefined;
+  ['gecerliBtn', 'gecersizBtn'].forEach(id => $(id).classList.toggle('izleyici', kuran || oyVerdi));
+  $('gecerliBtn').textContent = kurucu ? '✓ Kabul et (son karar)' : '👍 Evet';
+  $('gecersizBtn').textContent = kurucu ? '✗ Reddet (son karar)' : '👎 Hayır';
 }
 
 function harfSec(i) {
@@ -2327,6 +2332,7 @@ function kelimeyiGonder() {
   $('gecersizBtn').classList.toggle('gizli', durum === 'bulundu');
   $('gecerliBtn').textContent = durum === 'bulunamadi' ? '✓ Yine de kabul et' : '✓ Geçerli';
   finalYetkiAyarla();
+  if (durum !== 'bulundu') oylamaBasladi();
   durumDegisti();
 }
 

@@ -16,7 +16,7 @@
 
 // Online oyunun sürümü: ev ve misafirlerde aynı olmalı. Online kısmı her değiştiğinde 1 artır;
 // eski sürümle (önbellekte kalmış dosyalarla) gelen oyuncu odaya alınmaz, güncellemesi istenir.
-const SURUM = 5;
+const SURUM = 6;
 const ODA_ONEKI = 'harf-avcilari-oda-';
 const KOD_HARFLERI = 'ABCDEFGHJKLMNPRSTUVYZ23456789';  // karışabilecek O/0, I/1 yok
 const ODA_KODU_UZUNLUK = 5;
@@ -82,14 +82,29 @@ eylem = function (ad, ...args) {
 };
 
 // ---------- 🗳️ Kelime oylaması ----------
-// Kelimeyi kuran dışında, hâlâ oyunda olan herkes oy verir. Yarısı ya da fazlası "geçerli"
-// derse kabul (berabere kalırsa kelime sahibi kazanır), yarıdan fazlası "geçersiz" derse ret.
+// Sözlükte olmayan kelimede:
+//   - Oda kurucusu (kelimeyi kendisi kurmadıysa) son kararı verir: kabul ya da ret.
+//   - Diğerleri (kelimeyi kuran hariç) 👍/👎 oy verir; oylar kurucuya bilgi olur, herkesin ekranında görünür.
+//   - Kurucu kelimeyi kendisi kurduysa (ya da bağlantısı koptuysa) karar oylamayla verilir:
+//     çoğunluk kazanır, berabere kalırsa kabul.
+const kurucuKarar = () => oyun.finalSira !== 0 && !oyun.oyuncular[0].koptu;
+
 function secmenler() {
-  return oyun.oyuncular.map((_, i) => i).filter(i => i !== oyun.finalSira && !oyun.oyuncular[i].koptu);
+  return oyun.oyuncular.map((_, i) => i).filter(i =>
+    i !== oyun.finalSira && !oyun.oyuncular[i].koptu && !(i === 0 && kurucuKarar()));
 }
 
 function oyVer(oyuncuNo, gecerli) {
   oyun.oylar ??= {};
+  if (oyuncuNo === 0 && kurucuKarar()) {
+    const kisiler = secmenler();
+    const evet = kisiler.filter(i => oyun.oylar[i] === true).length;
+    const hayir = kisiler.filter(i => oyun.oylar[i] === false).length;
+    kayit(`👑 Oda kurucusu karar verdi: <b>${gecerli ? 'kabul' : 'ret'}</b>${kisiler.length ? ` (oylar: 👍 ${evet} · 👎 ${hayir})` : ''}`);
+    oyun.oylar = null;
+    oyla(!!gecerli);
+    return;
+  }
   oyun.oylar[oyuncuNo] = !!gecerli;
   oyKontrol();
 }
@@ -99,18 +114,34 @@ function oyKontrol() {
   const kisiler = secmenler();
   const evet = kisiler.filter(i => oyun.oylar[i] === true).length;
   const hayir = kisiler.filter(i => oyun.oylar[i] === false).length;
-  if (evet * 2 >= kisiler.length || hayir * 2 > kisiler.length) {
-    const sonuc = evet * 2 >= kisiler.length;
-    if (kisiler.length > 1) kayit(`🗳️ Oylama: ${evet} geçerli, ${hayir} geçersiz → <b>${sonuc ? 'kabul' : 'ret'}</b>`);
+  const bekleyen = kisiler.filter(i => oyun.oylar[i] === undefined);
+  // Oy verecek kimse kalmadıysa: karar kurucudaysa onu bekle, değilse kabul
+  if (!kisiler.length && !kurucuKarar()) {
+    oyun.oylar = null;
+    oyla(true);
+    return;
+  }
+  // Karar kurucuda değilse: herkes oy verince ya da çoğunluk kesinleşince sonuç otomatik
+  const kesin = !kurucuKarar()
+    && (!bekleyen.length || evet * 2 >= kisiler.length || hayir * 2 > kisiler.length);
+  if (kesin) {
+    const sonuc = evet >= hayir && evet * 2 >= kisiler.length - bekleyen.length;
+    kayit(`🗳️ Oylama: 👍 ${evet} · 👎 ${hayir} → <b>${sonuc ? 'kabul' : 'ret'}</b>`);
     oyun.oylar = null;
     oyla(sonuc);
     return;
   }
-  const bekleyen = kisiler.filter(i => oyun.oylar[i] === undefined).map(i => guvenli(oyun.oyuncular[i].ad));
-  $('oyDurumu').innerHTML = `🗳️ Oylar: ✓ ${evet} · ✗ ${hayir} · bekleniyor: ${bekleyen.join(', ')}`;
+  const kurucu = kurucuKarar() ? `👑 Son kararı oda kurucusu (${guvenli(oyun.oyuncular[0].ad)}) verir. ` : '';
+  $('oyDurumu').innerHTML = `${kurucu}🗳️ Oylar: 👍 ${evet} · 👎 ${hayir}`
+    + (bekleyen.length ? ` · bekleniyor: ${bekleyen.map(i => guvenli(oyun.oyuncular[i].ad)).join(', ')}` : '');
   finalYetkiAyarla();
   durumDegisti();
 }
+
+// Oylama açılınca sayaç hemen görünsün (ve oy verecek kimse yoksa takılmasın)
+oylamaBasladi = function () {
+  if (AG.mod === 'ev') oyKontrol();
+};
 
 // ---------- Durum ve olay aktarımı (evden misafirlere) ----------
 function gonder(mesaj) {
