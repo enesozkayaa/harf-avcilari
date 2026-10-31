@@ -10,6 +10,9 @@
   <link rel="icon" type="image/png" href="ikonlar/ikon-192.png">
   <link rel="apple-touch-icon" href="ikonlar/ikon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Harf Avcıları">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -21,9 +24,9 @@
     <button id="rehberBtn" class="rehberBtn">❓ Nasıl oynanır? · Kartlar · Kareler</button>
     <!-- 🌐 Online: biri oda açar, diğeri kodla katılır (bağlantı ag.js'te) -->
     <fieldset class="onlineKutu">
-      <legend>🌐 Online oyna (2 kişi)</legend>
-      <p class="soluk kucuk">Arkadaşın kendi telefonundan ya da bilgisayarından oda koduyla katılır.
-        Önce aşağıya kendi adını yaz ve rengini seç.</p>
+      <legend>🌐 Online oyna (2–6 kişi)</legend>
+      <p class="soluk kucuk">Arkadaşların kendi telefonlarından (Android ya da iPhone) veya bilgisayardan
+        oda koduyla katılır. Önce aşağıya kendi adını yaz ve rengini seç.</p>
       <div class="butonlar">
         <button id="odaAcBtn" class="ana">🏠 Oda Aç</button>
       </div>
@@ -145,6 +148,7 @@
     <!-- Kelime gönderilince: sözlükte varsa onay, yoksa masa (online'da rakip) karar verir -->
     <div id="oylama" class="gizli">
       <p id="oylamaSoru"></p>
+      <p id="oyDurumu" class="soluk kucuk"></p>
       <div class="butonlar">
         <button id="sozlukDevamBtn" class="ana" onclick="eylem('oyla', true, false)">Devam →</button>
         <button id="gecerliBtn" class="ana" onclick="eylem('oyla', true)">✓ Geçerli</button>

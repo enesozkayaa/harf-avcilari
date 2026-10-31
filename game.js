@@ -836,6 +836,14 @@ function sirayiBaslat() {
     setTimeout(sonrakiOyuncu, 1800);
     return;
   }
+  // 📡 Online'da bağlantısı kopan oyuncunun sırası kendiliğinden geçer
+  if (o.koptu) {
+    oyun.faz = 'donmus';
+    oyun.mesaj = `📡 ${isim(o)} oyundan ayrıldı, sırası geçiyor...`;
+    ciz();
+    setTimeout(sonrakiOyuncu, 900);
+    return;
+  }
   oyun.mesaj = `${isim(o)}, zar atma sırası sende!`;
   ciz();
 }
@@ -2057,6 +2065,12 @@ function kelimeTurunaGec() {
 }
 
 function finalOyuncusunuBaslat() {
+  // 📡 Bağlantısı kopan oyuncu kelime turunu pas geçer
+  if (finalOyuncu().koptu) {
+    finalOyuncu().kelime = '';
+    sonrakiFinal();
+    return;
+  }
   oyun.secilenler = [];
   oyun.jokerler = {};
   oyun.jokerSeciliyor = null;
@@ -2144,8 +2158,10 @@ function finalYetkiAyarla() {
   const kuran = benimSiram();
   ['finalHarfler', 'jokerSecici', 'kelimeKontrolleri', 'sozlukDevamBtn'].forEach(id =>
     $(id).classList.toggle('izleyici', !kuran));
+  // Kelimeyi kuran kendine oy veremez; oyunu veren de ikinci kez veremez
+  const oyVerdi = oyun.oylar?.[AG.benimNo] !== undefined;
   ['gecerliBtn', 'gecersizBtn'].forEach(id =>
-    $(id).classList.toggle('izleyici', online() && kuran));
+    $(id).classList.toggle('izleyici', online() && (kuran || oyVerdi)));
 }
 
 function harfSec(i) {
@@ -2211,6 +2227,9 @@ function kelimeyiGonder() {
   }
   $('kelimeKontrolleri').classList.add('gizli');
   $('oylama').classList.remove('gizli');
+  // Online'da 3+ kişide sözlükte olmayan kelimeyi diğer herkes oylar (ag.js)
+  oyun.oylar = {};
+  $('oyDurumu').innerHTML = '';
 
   // Kelime listesi varsa önce sözlüğe bakılır. Bulunursa otomatik kabul,
   // bulunamazsa son söz yine masada (listede sadece yalın haller var: KİTAP var, KİTAPLAR yok).
