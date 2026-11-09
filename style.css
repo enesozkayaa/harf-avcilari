@@ -919,3 +919,7 @@ button.kartYuz:hover:not(:disabled) { transform: translateY(-4px) rotate(-1.5deg
   #tepkiCubugu { right: 50%; transform: translateX(50%); bottom: 8px; }
   #tepkiCubugu button { font-size: 20px; }
 }
+
+/* iPhone: yazı kutusuna dokununca ekran büyümesin (16px altı yazılar büyütme yapar), çift dokunuşla büyütme olmasın */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; touch-action: manipulation; }
+input, select, textarea { font-size: max(16px, 1em); }
